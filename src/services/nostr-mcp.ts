@@ -32,7 +32,7 @@ const GIFT_WRAP_KIND = 1059;
 /** ContextVM server announcement kind (addressable, per @contextvm/sdk). */
 const SERVER_ANNOUNCEMENT_KIND = 11316;
 const MCP_PROTOCOL_VERSION = '2025-03-26';
-const TIMEOUT_MS = 45_000; // Nostr relay delivery can be slower than direct HTTP
+const TIMEOUT_MS = 20_000; // Generous for slow relays; failed servers fail fast rather than hanging the UI.
 
 /** Default relays to query for server discovery (mirrors the SDK's bootstrap list). */
 const DISCOVERY_RELAYS = [

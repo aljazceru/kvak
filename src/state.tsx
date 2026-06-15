@@ -264,7 +264,7 @@ interface AppContextValue {
   /** Disconnect from an HTTP MCP server */
   disconnectMCPServer: (id: string) => void;
   /** Connect to a Nostr MCP server */
-  connectNostrServer: (config: NostrMCPServerConfig) => Promise<void>;
+  connectNostrServer: (config: NostrMCPServerConfig, silent?: boolean) => Promise<void>;
   /** Disconnect from a Nostr MCP server */
   disconnectNostrServer: (id: string) => void;
   /** Get the tool prompt including all MCP tools */
@@ -420,9 +420,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Nostr MCP Actions (ContextVM) ─────────────────────────────────
 
-  async function connectNostrServer(config: NostrMCPServerConfig) {
+  async function connectNostrServer(config: NostrMCPServerConfig, silent = false) {
     if (!config.serverPubkey || !config.relayUrls?.length) {
-      Alert.alert('Invalid Config', 'Nostr MCP server requires a pubkey and at least one relay URL.');
+      if (!silent) Alert.alert('Invalid Config', 'Nostr MCP server requires a pubkey and at least one relay URL.');
       return;
     }
 
@@ -433,11 +433,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'UPDATE_NOSTR_SERVER', id: config.id, patch: { enabled: true } });
       } else {
         dispatch({ type: 'UPDATE_NOSTR_SERVER', id: config.id, patch: { enabled: false } });
-        if (conn.error) Alert.alert('Nostr MCP Connection Failed', conn.error);
+        if (conn.error && !silent) {
+          Alert.alert(
+            'Could not connect',
+            conn.error + '\n\nThe server may be offline, or running an older ContextVM SDK version that rejects encrypted messages. Try a different server.',
+          );
+        }
       }
     } catch (e: any) {
       dispatch({ type: 'UPDATE_NOSTR_SERVER', id: config.id, patch: { enabled: false } });
-      Alert.alert('Nostr MCP Error', e.message || String(e));
+      if (!silent) Alert.alert('Nostr MCP Error', e.message || String(e));
     }
     dispatch({ type: 'SET_NOSTR_CONNECTING', id: config.id, connecting: false });
     refreshNostrTools();
@@ -504,7 +509,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_NOSTR_SERVERS', servers: persistedNostrServers });
         for (const server of persistedNostrServers) {
           if (server.enabled) {
-            connectNostrServer(server).catch(() => {});
+            connectNostrServer(server, true).catch(() => {});
           }
         }
       }
