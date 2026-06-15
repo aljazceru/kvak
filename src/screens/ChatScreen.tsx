@@ -373,21 +373,21 @@ export const ChatScreen: React.FC = React.memo(() => {
             {/* Actions */}
             <View style={s.msgActions}>
               <TouchableOpacity onPress={() => copyMessage(m.content)}>
-                <Text style={s.msgActionText}>Copy</Text>
+                <Text style={[s.msgActionText, { color: c.textSecondary }]}>Copy</Text>
               </TouchableOpacity>
               {m.role === 'user' && editingId !== m.id && (
                 <TouchableOpacity onPress={() => { setEditingId(m.id); setEditText(m.content); }}>
-                  <Text style={s.msgActionText}>Edit</Text>
+                  <Text style={[s.msgActionText, { color: c.textSecondary }]}>Edit</Text>
                 </TouchableOpacity>
               )}
               {m.role === 'assistant' && !m.isError && (
                 <TouchableOpacity style={s.ttsBtn} onPress={() => toggleTTS(m.content, m.id)}>
-                  <Text style={s.ttsIcon}>{ttsPlaying && ttsId === m.id ? '⏹' : '🔊'}</Text>
+                  <Text style={[s.ttsIcon, { color: c.textSecondary }]}>{ttsPlaying && ttsId === m.id ? '⏹' : '🔊'}</Text>
                 </TouchableOpacity>
               )}
               {m.role === 'assistant' && idx === lastAssistantIdx && !loading && (
                 <TouchableOpacity onPress={retryLast}>
-                  <Text style={s.msgActionText}>Retry</Text>
+                  <Text style={[s.msgActionText, { color: c.textSecondary }]}>Retry</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -432,11 +432,11 @@ export const ChatScreen: React.FC = React.memo(() => {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[s.sendBtn, !input.trim() && { backgroundColor: c.surface }]}
+            style={[s.sendBtn, { backgroundColor: input.trim() ? c.accent : c.surface }]}
             onPress={send}
             disabled={!input.trim()}
           >
-            <Text style={[s.sendIcon, { color: input.trim() ? c.bg : c.mutedText }]}>↑</Text>
+            <Text style={[s.sendIcon, { color: input.trim() ? '#fff' : c.mutedText }]}>↑</Text>
           </TouchableOpacity>
         )}
       </View>
