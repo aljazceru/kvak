@@ -150,8 +150,12 @@ export async function processToolCalls(
     } catch { /* ignore malformed tool calls */ }
   }
 
+  // Strip any remaining [TOOL: ...] markers (malformed, unknown, or unparseable)
+  // so the raw tool-call syntax never leaks into the chat as visible text.
+  cleaned = cleaned.replace(/\[TOOL:\s*[^\]]*\]/g, '').trim();
+
   // Empty content is valid (e.g. model emitted only tool calls); the UI hides an empty bubble.
-  return { cleaned: cleaned.trim(), toolCalls: toolCalls.length ? toolCalls : [] };
+  return { cleaned, toolCalls: toolCalls.length ? toolCalls : [] };
 }
 
 /**

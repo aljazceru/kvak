@@ -323,7 +323,11 @@ export const ChatScreen: React.FC = React.memo(() => {
           </View>
         )}
 
-        {conv.messages.map((m, idx) => (
+        {conv.messages.map((m, idx) => {
+          // Skip empty assistant messages (no text, no tool results) — these are
+          // inference no-ops and shouldn't render an empty bubble with dangling actions.
+          if (m.role === 'assistant' && !m.content.trim() && !(m.toolCalls && m.toolCalls.length)) return null;
+          return (
           <View key={m.id} style={[s.bubbleRow, m.role === 'user' ? s.bubbleRowUser : s.bubbleRowAsst]}>
             <View style={[
               s.bubble,
@@ -388,7 +392,8 @@ export const ChatScreen: React.FC = React.memo(() => {
               )}
             </View>
           </View>
-        ))}
+          );
+        })}
 
         {/* Streaming indicator */}
         {loading && streamingText ? (
