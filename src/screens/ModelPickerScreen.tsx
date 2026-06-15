@@ -9,6 +9,7 @@ import { styles as s } from '../theme';
 import type { ModelInfo } from '../types';
 import { formatBytes } from '../services/helpers';
 import { Llama } from '../services/native';
+import { saveLoadedModel } from '../services/storage';
 
 export const ModelPickerScreen: React.FC = React.memo(() => {
   const { state, dispatch, modelPath } = useApp();
@@ -42,6 +43,7 @@ export const ModelPickerScreen: React.FC = React.memo(() => {
           modelId: `${model.name} (${model.quant})`,
           template: model.template,
         });
+        saveLoadedModel(model.filename);
       } else {
         Alert.alert('Load Failed', 'Could not load model.');
       }
@@ -72,7 +74,7 @@ export const ModelPickerScreen: React.FC = React.memo(() => {
             <View style={[s.modelBadge, { backgroundColor: c.accent + '22' }]}>
               <Text style={[s.modelBadgeText, { color: c.accent }]}>{model.quant}</Text>
             </View>
-            {downloaded && <Text style={s.modelDownBadge}>Saved</Text>}
+            {downloaded && <Text style={[s.modelDownBadge, { color: c.green }]}>Saved</Text>}
           </View>
           <Text style={[s.modelDesc, { color: c.textSecondary }]}>{model.description}</Text>
         </View>
@@ -104,6 +106,7 @@ export const ModelPickerScreen: React.FC = React.memo(() => {
                       if (state.loadedModelId?.includes(model.name)) {
                         await Llama?.free();
                         dispatch({ type: 'SET_MODEL_LOADED', loaded: false, modelId: '', template: '' });
+                        saveLoadedModel(null);
                       }
                     },
                   },

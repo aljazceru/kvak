@@ -12,6 +12,7 @@ const KEYS = {
   whisperModel: '@mangoqvac:whisperModel',
   mcpServers: '@mangoqvac:mcpServers',
   nostrMcpServers: '@mangoqvac:nostrMcpServers',
+  loadedModel: '@mangoqvac:loadedModel',
 };
 
 /**
@@ -119,5 +120,20 @@ export async function loadNostrMCPServers(): Promise<NostrMCPServerConfig[]> {
 export async function saveNostrMCPServers(servers: NostrMCPServerConfig[]): Promise<void> {
   try {
     await AsyncStorage.setItem(KEYS.nostrMcpServers, JSON.stringify(servers));
+  } catch {}
+}
+
+// ─── Loaded Model (auto-restore on restart) ─────────────────────
+
+export async function loadLoadedModel(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(KEYS.loadedModel);
+  } catch { return null; }
+}
+
+export async function saveLoadedModel(filename: string | null): Promise<void> {
+  try {
+    if (filename) await AsyncStorage.setItem(KEYS.loadedModel, filename);
+    else await AsyncStorage.removeItem(KEYS.loadedModel);
   } catch {}
 }

@@ -6,7 +6,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef } from 
 import { NativeEventEmitter, Alert, Clipboard } from 'react-native';
 import type { Conversation, Message, DeviceInfo, DownloadProgress, Screen, MCPServerConfig, MCPTool } from './types';
 import { Llama, Speech, Whisper } from './services/native';
-import { WHISPER_CATALOG } from './services/constants';
+import { WHISPER_CATALOG, MODEL_CATALOG } from './services/constants';
 import { processToolCalls, buildToolPrompt } from './services/tools';
 import { mcpClient } from './services/mcp';
 import { nostrMcpClient } from './services/nostr-mcp';
@@ -18,6 +18,7 @@ import {
   loadWhisperModelId, saveWhisperModelId,
   loadMCPServers, saveMCPServers,
   loadNostrMCPServers, saveNostrMCPServers,
+  loadLoadedModel, saveLoadedModel,
 } from './services/storage';
 
 // ─── State shape ──────────────────────────────────────────────────────
@@ -384,6 +385,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function unloadModel() {
     await Llama?.free();
     dispatch({ type: 'SET_MODEL_LOADED', loaded: false, modelId: '', template: '' });
+    saveLoadedModel(null);
   }
 
   // ─── HTTP MCP Actions ──────────────────────────────────────────────
@@ -516,6 +518,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
           const files: string[] = await Llama.listModels();
           files.forEach(f => dispatch({ type: 'ADD_DOWNLOADED', filename: f }));
+
+          // Auto-restore the last loaded model so the app starts ready to chat.
+          const loadedFilename = await loadLoadedModel();
+          if (loadedFilename && !cancelled) {
+            const exists = await Llama.fileExists(modelPath(loadedFilename));
+            if (exists) {
+              const ok = await Llama.loadModel(modelPath(loadedFilename));
+              if (ok) {
+                const model = MODEL_CATALOG.find(m => m.filename === loadedFilename);
+                dispatch({
+                  type: 'SET_MODEL_LOADED',
+                  loaded: true,
+                  modelId: model ? `${model.name} (${model.quant})` : loadedFilename,
+                  template: model?.template || 'simple',
+                });
+              }
+            } else {
+              // File gone (uninstalled/cleared) — drop the stale reference.
+              saveLoadedModel(null);
+            }
+          }
 
           for (const wm of [...WHISPER_CATALOG].reverse()) {
             const exists = await Llama.fileExists(modelPath(wm.filename));
