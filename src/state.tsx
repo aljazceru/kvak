@@ -2,12 +2,11 @@
  * Mango × QVAC — App state management via React Context + useReducer.
  * All mutable state lives here instead of module-level variables.
  */
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { NativeEventEmitter, Alert, Clipboard } from 'react-native';
 import type { Conversation, Message, DeviceInfo, DownloadProgress, Screen, MCPServerConfig, MCPTool } from './types';
 import { Llama, Speech, Whisper } from './services/native';
-import { MODEL_CATALOG, WHISPER_CATALOG, SYSTEM_PROMPT_DEFAULT } from './services/constants';
-import { buildPrompt } from './services/templates';
+import { WHISPER_CATALOG } from './services/constants';
 import { processToolCalls, buildToolPrompt } from './services/tools';
 import { mcpClient } from './services/mcp';
 import { nostrMcpClient } from './services/nostr-mcp';
@@ -119,6 +118,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'ADD_CONV':
       return { ...state, convs: { ...state.convs, [action.conv.id]: action.conv } };
     case 'DELETE_CONV': {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [action.id]: _, ...rest } = state.convs;
       return {
         ...state,
@@ -472,7 +472,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       // Load persisted state
-      const [persistedConvs, persistedTheme, persistedWhisper, persistedMCPServers, persistedNostrServers] = await Promise.all([
+      const [persistedConvs, persistedTheme, _persistedWhisper, persistedMCPServers, persistedNostrServers] = await Promise.all([
         loadConversations(),
         loadTheme(),
         loadWhisperModelId(),
@@ -586,6 +586,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       sub1.remove();
       sub2.remove();
     };
+    // One-shot mount: load persisted state, restore MCP/Nostr servers, probe native modules.
+    // connectNostrServer is intentionally omitted — re-running init on every render would thrash.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Render ───────────────────────────────────────────────────────

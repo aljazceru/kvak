@@ -1,7 +1,7 @@
 /**
  * Mango × QVAC — Conversation List Screen
  */
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useApp } from '../state';
 import { getTheme } from '../theme';

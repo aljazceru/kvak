@@ -14,6 +14,8 @@ export const TOOLS: Record<string, (args: Record<string, any>) => string> = {
     try {
       const expr = (a.expression || '').replace(/[^0-9+\-*/.()% ]/g, '');
       if (!expr) return 'Error: empty expression';
+      // ponytail: expr is sanitized to digits/operators above; safe to eval via Function.
+      // eslint-disable-next-line no-new-func
       const r = Function('"use strict";return (' + expr + ')')();
       return `Result: ${r}`;
     } catch { return 'Error in calculation'; }

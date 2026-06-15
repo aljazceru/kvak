@@ -5,8 +5,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Alert,
-  Keyboard, ActivityIndicator,
-  NativeEventEmitter, NativeModules,
+  Keyboard,
+  NativeEventEmitter,
 } from 'react-native';
 import { useApp } from '../state';
 import { getTheme } from '../theme';
@@ -21,7 +21,7 @@ import { uid } from '../services/helpers';
 const emitter = new NativeEventEmitter();
 
 export const ChatScreen: React.FC = React.memo(() => {
-  const { state, dispatch, modelPath, executeToolCalls, getToolPrompt, forkConversation, exportConversation } = useApp();
+  const { state, dispatch, executeToolCalls, getToolPrompt, forkConversation, exportConversation } = useApp();
   const conv = state.activeConvId ? state.convs[state.activeConvId] : null;
   const c = getTheme(state.isDark);
 
@@ -121,6 +121,8 @@ export const ChatScreen: React.FC = React.memo(() => {
       sttResult.remove(); sttError.remove(); sttEnd.remove();
       ttsDone.remove(); ttsErrorEv.remove();
     };
+    // finalizeMessage is a component-scope closure; rebinding all listeners on every render would thrash them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activeConvId]);
 
   // ─── Actions ────────────────────────────────────────────────────

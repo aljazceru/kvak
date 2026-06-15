@@ -1,13 +1,38 @@
 {
-  "name": "MangoQvac",
-  "version": "0.0.1",
+  "name": "mango-qvac",
+  "version": "0.1.0",
+  "description": "On-device AI chat for Android — local LLMs (llama.cpp), Whisper STT, and MCP tool calling over HTTP and Nostr (ContextVM).",
+  "license": "MIT",
   "private": true,
+  "author": "Mango QVAC contributors",
+  "homepage": "https://github.com/mango-qvac/mango-qvac#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mango-qvac/mango-qvac.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mango-qvac/mango-qvac/issues"
+  },
+  "keywords": [
+    "react-native",
+    "android",
+    "llama-cpp",
+    "on-device-ai",
+    "local-llm",
+    "whisper",
+    "mcp",
+    "nostr",
+    "contextvm"
+  ],
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "bundle:android": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
+    "build:android": "npm run bundle:android && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^3.1.1",

@@ -41,7 +41,7 @@ function AppInner() {
       return false;
     });
     return () => handler.remove();
-  }, [state.screen]);
+  }, [state.screen, dispatch]);
 
   const insets = useSafeAreaInsets();
   // Lift the whole window above the soft keyboard so the compose bar (and the

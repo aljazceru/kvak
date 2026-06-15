@@ -2,8 +2,6 @@
  * Mango × QVAC — Theme system
  * Memoized color palette for dark/light modes.
  */
-import { Platform, StatusBar as RNStatusBar } from 'react-native';
-
 export interface ThemeColors {
   bg: string;
   surface: string;

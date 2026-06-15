@@ -229,7 +229,7 @@ class HTTPTransport {
           const json = JSON.parse(xhr.responseText);
           if (json.error) { reject(new Error(`MCP error: ${json.error.message}`)); return; }
           resolve(json.result);
-        } catch (e) {
+        } catch {
           reject(new Error(`Failed to parse response: ${xhr.responseText.slice(0, 200)}`));
         }
       };

@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 project(mango_llama)
 
-set(LLAMA_DIR "/home/lio/g/llama.cpp")
+# Path to a llama.cpp checkout. Override with -DLLAMA_DIR=... or the LLAMA_DIR env var.
+# NOTE: This CMakeLists rebuilds only the thin JNI bridge (libmango_llama.so).
+# The gradle build does NOT invoke CMake — the committed .so files in jniLibs/
+# are linked directly. Rebuild only if you change the C++ bridge or upgrade llama.cpp.
+set(LLAMA_DIR "$ENV{LLAMA_DIR}" CACHE PATH "Path to a llama.cpp source checkout")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a")
 
 add_library(mango_llama SHARED

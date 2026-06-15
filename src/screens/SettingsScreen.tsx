@@ -7,7 +7,6 @@ import { useApp } from '../state';
 import { getTheme } from '../theme';
 import { styles as s } from '../theme';
 import { WHISPER_CATALOG } from '../services/constants';
-import { formatBytes } from '../services/helpers';
 import { Whisper } from '../services/native';
 import type { MCPServerConfig } from '../types';
 import type { NostrMCPServerConfig } from '../services/nostr-mcp';
