@@ -44,6 +44,8 @@ function AppInner() {
   }, [state.screen, dispatch]);
 
   const insets = useSafeAreaInsets();
+  const chatsActive = state.screen === 'conversations' || state.screen === 'chat';
+  const settingsActive = state.screen === 'settings';
   // Lift the whole window above the soft keyboard so the compose bar (and the
   // text being typed) stays visible. Adjusts for edge-to-edge on targetSdk 35+.
   const keyboardHeight = useKeyboardHeight();
@@ -117,7 +119,9 @@ function AppInner() {
           style={s.tab}
           onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'conversations' })}
         >
-          <Text style={[s.tabLabel, state.screen === 'conversations' && s.tabActiveLabel, state.screen === 'conversations' && { color: c.accent }]}>Chats</Text>
+          <View style={[s.tabPill, chatsActive && { backgroundColor: c.accent + '22' }]}>
+            <Text style={[s.tabLabel, { color: chatsActive ? c.accent : c.textSecondary }, chatsActive && s.tabActiveLabel]}>Chats</Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.tabNew, { backgroundColor: c.accent }]}
@@ -129,7 +133,9 @@ function AppInner() {
           style={s.tab}
           onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'settings' })}
         >
-          <Text style={[s.tabLabel, state.screen === 'settings' && s.tabActiveLabel, state.screen === 'settings' && { color: c.accent }]}>Settings</Text>
+          <View style={[s.tabPill, settingsActive && { backgroundColor: c.accent + '22' }]}>
+            <Text style={[s.tabLabel, { color: settingsActive ? c.accent : c.textSecondary }, settingsActive && s.tabActiveLabel]}>Settings</Text>
+          </View>
         </TouchableOpacity>
       </View>
       )}

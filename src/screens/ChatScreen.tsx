@@ -372,21 +372,21 @@ export const ChatScreen: React.FC = React.memo(() => {
 
             {/* Actions */}
             <View style={s.msgActions}>
-              <TouchableOpacity onPress={() => copyMessage(m.content)}>
+              <TouchableOpacity style={[s.msgAction, { backgroundColor: c.surface }]} onPress={() => copyMessage(m.content)}>
                 <Text style={[s.msgActionText, { color: c.textSecondary }]}>Copy</Text>
               </TouchableOpacity>
               {m.role === 'user' && editingId !== m.id && (
-                <TouchableOpacity onPress={() => { setEditingId(m.id); setEditText(m.content); }}>
+                <TouchableOpacity style={[s.msgAction, { backgroundColor: c.surface }]} onPress={() => { setEditingId(m.id); setEditText(m.content); }}>
                   <Text style={[s.msgActionText, { color: c.textSecondary }]}>Edit</Text>
                 </TouchableOpacity>
               )}
               {m.role === 'assistant' && !m.isError && (
-                <TouchableOpacity style={s.ttsBtn} onPress={() => toggleTTS(m.content, m.id)}>
-                  <Text style={[s.ttsIcon, { color: c.textSecondary }]}>{ttsPlaying && ttsId === m.id ? '⏹' : '🔊'}</Text>
+                <TouchableOpacity style={[s.msgAction, { backgroundColor: (ttsPlaying && ttsId === m.id) ? c.accent + '22' : c.surface }]} onPress={() => toggleTTS(m.content, m.id)}>
+                  <Text style={[s.msgActionText, { color: (ttsPlaying && ttsId === m.id) ? c.accent : c.textSecondary }]}>{ttsPlaying && ttsId === m.id ? 'Stop' : 'Listen'}</Text>
                 </TouchableOpacity>
               )}
               {m.role === 'assistant' && idx === lastAssistantIdx && !loading && (
-                <TouchableOpacity onPress={retryLast}>
+                <TouchableOpacity style={[s.msgAction, { backgroundColor: c.surface }]} onPress={retryLast}>
                   <Text style={[s.msgActionText, { color: c.textSecondary }]}>Retry</Text>
                 </TouchableOpacity>
               )}
@@ -443,9 +443,10 @@ export const ChatScreen: React.FC = React.memo(() => {
 
       {/* Status footer */}
       <View style={[s.composeFooter, { backgroundColor: c.bg }]}>
-        <Text style={[s.composeStatus, { color: c.textSecondary }]}>{state.modelLoaded ? '● On-device' : '○ No model'}</Text>
-        <TouchableOpacity onPress={() => setShowMenu(!showMenu)}>
-          <Text style={[s.composeStatus, { color: c.textSecondary }]}>{conv.toolsEnabled ? 'Tools' : ''}  ···</Text>
+        <Text style={[s.composeStatus, { color: state.modelLoaded ? c.green : c.mutedText }]}>{state.modelLoaded ? '● On-device' : '○ No model'}</Text>
+        <TouchableOpacity style={[s.toolsChip, { backgroundColor: c.surface }]} onPress={() => setShowMenu(!showMenu)}>
+          <Text style={[s.composeStatus, { color: conv.toolsEnabled ? c.green : c.textSecondary }]}>{conv.toolsEnabled ? 'Tools ON' : 'Tools'}</Text>
+          <Text style={[s.composeStatus, { color: c.textSecondary }]}>···</Text>
         </TouchableOpacity>
       </View>
     </View>

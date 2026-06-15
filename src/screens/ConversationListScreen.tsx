@@ -2,7 +2,7 @@
  * Mango × QVAC — Conversation List Screen
  */
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, Modal, Pressable } from 'react-native';
 import { useApp } from '../state';
 import { getTheme } from '../theme';
 import { relativeTime } from '../services/helpers';
@@ -13,6 +13,7 @@ export const ConversationListScreen: React.FC = React.memo(() => {
   const c = getTheme(state.isDark);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
+  const [sheetId, setSheetId] = useState<string | null>(null);
 
   const convIds = Object.keys(state.convs).sort(
     (a, b) => state.convs[b].updatedAt - state.convs[a].updatedAt,
@@ -34,12 +35,7 @@ export const ConversationListScreen: React.FC = React.memo(() => {
         activeOpacity={isRenaming ? 1 : 0.2}
         onLongPress={() => {
           if (isRenaming) return;
-          Alert.alert(cv.title, undefined, [
-            { text: 'Rename', onPress: () => { setRenamingId(id); setRenameText(cv.title); } },
-            { text: 'Export', onPress: () => exportConversation(id) },
-            { text: 'Fork', onPress: () => forkConversation(id) },
-            { text: 'Cancel', style: 'cancel' },
-          ]);
+          setSheetId(id);
         }}
       >
         {isRenaming ? (
@@ -98,7 +94,7 @@ export const ConversationListScreen: React.FC = React.memo(() => {
         )}
       </TouchableOpacity>
     );
-  }, [state.convs, c, renamingId, renameText, openConversation, forkConversation, exportConversation, dispatch]);
+  }, [state.convs, c, renamingId, renameText, openConversation, dispatch]);
 
   if (convIds.length === 0) {
     return (
@@ -110,6 +106,8 @@ export const ConversationListScreen: React.FC = React.memo(() => {
     );
   }
 
+  const sheetConv = sheetId ? state.convs[sheetId] : null;
+
   return (
     <View style={s.flex}>
       <FlatList
@@ -118,6 +116,36 @@ export const ConversationListScreen: React.FC = React.memo(() => {
         contentContainerStyle={s.convList}
         renderItem={renderItem}
       />
+      {/* ponytail: themed bottom sheet replaces the native Alert.alert long-press
+          menu, which on Android rendered as a white box with teal text and broke
+          the dark theme. Uses core RN Modal — no new dependency. */}
+      <Modal
+        transparent
+        animationType="slide"
+        visible={!!sheetConv}
+        onRequestClose={() => setSheetId(null)}
+      >
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' }} onPress={() => setSheetId(null)}>
+          <Pressable
+            style={{ marginTop: 'auto', backgroundColor: c.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32, borderTopWidth: 1, borderColor: c.border }}
+          >
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, alignSelf: 'center', marginBottom: 14 }} />
+            <Text style={{ color: c.textPrimary, fontSize: 16, fontWeight: '700', marginBottom: 4 }} numberOfLines={1}>{sheetConv?.title}</Text>
+            {[
+              { label: 'Rename', action: () => { if (sheetId) { setRenamingId(sheetId); setRenameText(state.convs[sheetId]?.title || ''); } } },
+              { label: 'Export', action: () => { if (sheetId) exportConversation(sheetId); } },
+              { label: 'Fork', action: () => { if (sheetId) forkConversation(sheetId); } },
+            ].map(opt => (
+              <TouchableOpacity key={opt.label} style={{ paddingVertical: 15, borderBottomWidth: 1, borderColor: c.border }} onPress={() => { setSheetId(null); opt.action(); }}>
+                <Text style={{ color: c.textPrimary, fontSize: 15 }}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={{ paddingVertical: 15, alignItems: 'center', marginTop: 6 }} onPress={() => setSheetId(null)}>
+              <Text style={{ color: c.textSecondary, fontSize: 15, fontWeight: '700' }}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 });

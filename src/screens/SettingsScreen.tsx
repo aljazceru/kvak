@@ -2,7 +2,7 @@
  * Mango × QVAC — Settings Screen
  */
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, Switch } from 'react-native';
 import { useApp } from '../state';
 import { getTheme } from '../theme';
 import { styles as s } from '../theme';
@@ -39,7 +39,7 @@ export const SettingsScreen: React.FC = React.memo(() => {
       <Text style={[s.sectionTitle, { color: c.textSecondary }]}>Active Model</Text>
       <View style={[s.modelStatusCard, { backgroundColor: c.surface, borderColor: c.border }]}>
         <View style={s.modelStatusRow}>
-          <Text style={s.modelStatusIcon}>{state.modelLoaded ? '●' : '○'}</Text>
+          <Text style={[s.modelStatusIcon, { color: state.modelLoaded ? c.green : c.mutedText }]}>{state.modelLoaded ? '●' : '○'}</Text>
           <View style={s.modelStatusInfo}>
             <Text style={[s.modelStatusName, { color: c.textPrimary }]}>{state.loadedModelId || 'No model loaded'}</Text>
             <Text style={[s.modelStatusDetail, { color: c.textSecondary }]}>
@@ -75,7 +75,7 @@ export const SettingsScreen: React.FC = React.memo(() => {
       <Text style={[s.sectionTitle, { color: c.textSecondary }]}>Voice Input (STT)</Text>
       <View style={[s.deviceCard, { backgroundColor: c.surface, borderColor: c.border }]}>
         <View style={s.modelStatusRow}>
-          <Text style={s.modelStatusIcon}>{state.whisperLoaded ? '●' : '○'}</Text>
+          <Text style={[s.modelStatusIcon, { color: state.whisperLoaded ? c.green : c.mutedText }]}>{state.whisperLoaded ? '●' : '○'}</Text>
           <View style={s.modelStatusInfo}>
             <Text style={[s.modelStatusName, { color: c.textPrimary }]}>
               {state.whisperLoaded ? `Whisper ${WHISPER_CATALOG.find(w => w.id === state.whisperModelId)?.name || 'loaded'}` : 'No STT model'}
@@ -134,7 +134,7 @@ export const SettingsScreen: React.FC = React.memo(() => {
       <Text style={[s.sectionTitle, { color: c.textSecondary }]}>Voice Output (TTS)</Text>
       <View style={[s.deviceCard, { backgroundColor: c.surface, borderColor: c.border }]}>
         <View style={s.modelStatusRow}>
-          <Text style={s.modelStatusIcon}>{state.ttsReady ? '●' : '○'}</Text>
+          <Text style={[s.modelStatusIcon, { color: state.ttsReady ? c.green : c.mutedText }]}>{state.ttsReady ? '●' : '○'}</Text>
           <View style={s.modelStatusInfo}>
             <Text style={[s.modelStatusName, { color: c.textPrimary }]}>
               {state.ttsReady ? 'System TTS Ready' : 'Starting TTS...'}
@@ -441,9 +441,18 @@ export const SettingsScreen: React.FC = React.memo(() => {
         <TouchableOpacity
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
           onPress={() => dispatch({ type: 'SET_THEME', dark: !state.isDark })}
+          activeOpacity={0.6}
         >
-          <Text style={[s.deviceRow, { color: c.textSecondary, marginBottom: 0 }]}>Theme</Text>
-          <Text style={{ color: c.accent, fontSize: 14 }}>{state.isDark ? 'Dark' : 'Light'}</Text>
+          <View>
+            <Text style={{ color: c.textPrimary, fontSize: 14, fontWeight: '600' }}>Theme</Text>
+            <Text style={{ color: c.textSecondary, fontSize: 12, marginTop: 2 }}>{state.isDark ? 'Dark' : 'Light'}</Text>
+          </View>
+          <Switch
+            value={state.isDark}
+            onValueChange={(v) => dispatch({ type: 'SET_THEME', dark: v })}
+            trackColor={{ false: c.border, true: c.accent }}
+            thumbColor="#FFFFFF"
+          />
         </TouchableOpacity>
       </View>
 

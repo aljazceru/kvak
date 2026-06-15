@@ -74,7 +74,11 @@ export const ModelPickerScreen: React.FC = React.memo(() => {
             <View style={[s.modelBadge, { backgroundColor: c.accent + '22' }]}>
               <Text style={[s.modelBadgeText, { color: c.accent }]}>{model.quant}</Text>
             </View>
-            {downloaded && <Text style={[s.modelDownBadge, { color: c.green }]}>Saved</Text>}
+            {downloaded && (
+              <View style={[s.modelBadge, { backgroundColor: c.green + '22' }]}>
+                <Text style={[s.modelBadgeText, { color: c.green }]}>Saved</Text>
+              </View>
+            )}
           </View>
           <Text style={[s.modelDesc, { color: c.textSecondary }]}>{model.description}</Text>
         </View>
@@ -111,23 +115,23 @@ export const ModelPickerScreen: React.FC = React.memo(() => {
                     },
                   },
                 ])}
-                style={s.modelActionBtn}
+                style={s.modelGhostBtn}
               >
-                <Text style={{ color: c.destructive, fontSize: 12 }}>Delete</Text>
+                <Text style={{ color: c.destructive, fontSize: 13, fontWeight: '600' }}>Delete</Text>
               </TouchableOpacity>
             )}
             {isActive ? (
-              <Text style={[s.modelActive, { color: c.green }]}>Active</Text>
+              <Text style={[s.modelActive, { color: c.green }]}>● Active</Text>
             ) : downloaded ? (
-              <TouchableOpacity onPress={() => selectModel(model)} disabled={!!loading} style={s.modelActionBtn}>
-                <Text style={{ color: c.accent, fontSize: 13, fontWeight: '500' }}>Load →</Text>
+              <TouchableOpacity onPress={() => selectModel(model)} disabled={!!loading} style={[s.modelPrimaryBtn, { backgroundColor: c.accent }]}>
+                <Text style={[s.modelPrimaryText, { color: '#fff' }]}>Load</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={() => selectModel(model)} disabled={!!loading} style={s.modelActionBtn}>
+              <TouchableOpacity onPress={() => selectModel(model)} disabled={!!loading} style={[s.modelPrimaryBtn, { backgroundColor: c.green }]}>
                 {loading === model.id || isDownloading ? (
-                  <ActivityIndicator color={c.accent} size="small" />
+                  <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={{ color: c.green, fontSize: 13, fontWeight: '500' }}>Download</Text>
+                  <Text style={[s.modelPrimaryText, { color: '#fff' }]}>Download</Text>
                 )}
               </TouchableOpacity>
             )}
