@@ -29,8 +29,17 @@ import { hexToBytes } from 'nostr-tools/utils';
 
 const CTXVM_MESSAGES_KIND = 25910;
 const GIFT_WRAP_KIND = 1059;
+/** ContextVM server announcement kind (addressable, per @contextvm/sdk). */
+const SERVER_ANNOUNCEMENT_KIND = 11316;
 const MCP_PROTOCOL_VERSION = '2025-03-26';
 const TIMEOUT_MS = 45_000; // Nostr relay delivery can be slower than direct HTTP
+
+/** Default relays to query for server discovery (mirrors the SDK's bootstrap list). */
+const DISCOVERY_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://relay.primal.net',
+  'wss://nos.lol',
+];
 
 // ─── JSON-RPC Types ────────────────────────────────────────────
 
@@ -525,3 +534,74 @@ class NostrMCPClient {
 
 /** Singleton Nostr MCP client. Generates a random Nostr identity on first use. */
 export const nostrMcpClient = new NostrMCPClient();
+
+// ─── Server Discovery ─────────────────────────────────────────
+
+/** A ContextVM server discovered from a kind 11316 announcement. */
+export interface DiscoveredServer {
+  /** Server Nostr pubkey (hex). Add this as a server's pubkey to connect. */
+  pubkey: string;
+  name: string;
+  about?: string;
+  website?: string;
+  /** A relay the announcement was seen on — a reasonable relay to connect through. */
+  relayUrl: string;
+  createdAt: number;
+}
+
+/**
+ * Discover ContextVM servers by querying kind 11316 announcement events.
+ *
+ * Runs a one-shot REQ against the given relays (defaults to the SDK's bootstrap
+ * relays), collects announcements for `timeoutMs`, dedups by pubkey keeping
+ * the newest, and returns the list. Does NOT touch the running nostrMcpClient
+ * or its relay pool.
+ */
+export async function discoverServers(
+  relayUrls: string[] = DISCOVERY_RELAYS,
+  timeoutMs = 8000,
+): Promise<DiscoveredServer[]> {
+  const byPubkey = new Map<string, DiscoveredServer>();
+  const sockets: WebSocket[] = [];
+  const subId = `discover_${Date.now()}`;
+
+  for (const url of relayUrls) {
+    try {
+      const ws = new WebSocket(url);
+      sockets.push(ws);
+      ws.onopen = () => {
+        try {
+          ws.send(JSON.stringify(['REQ', subId, { kinds: [SERVER_ANNOUNCEMENT_KIND], limit: 200 }]));
+        } catch { /* ignore */ }
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data as string);
+          if (!Array.isArray(data) || data[0] !== 'EVENT' || data[2]?.kind !== SERVER_ANNOUNCEMENT_KIND) return;
+          const e = data[2];
+          const tagVal = (k: string) => e.tags?.find((t: string[]) => t[0] === k)?.[1];
+          const existing = byPubkey.get(e.pubkey);
+          // Addressable event: keep the newest per pubkey.
+          if (existing && existing.createdAt >= e.created_at) return;
+          byPubkey.set(e.pubkey, {
+            pubkey: e.pubkey,
+            name: tagVal('name') || e.pubkey.slice(0, 12) + '…',
+            about: tagVal('about'),
+            website: tagVal('website'),
+            relayUrl: url,
+            createdAt: e.created_at,
+          });
+        } catch { /* ignore malformed */ }
+      };
+      ws.onerror = () => { try { ws.close(); } catch {} };
+    } catch {
+      // bad relay URL — skip
+    }
+  }
+
+  // Wait for results to accumulate, then close everything.
+  await new Promise<void>(r => setTimeout(r, timeoutMs));
+  for (const ws of sockets) { try { ws.close(); } catch {} }
+
+  return Array.from(byPubkey.values()).sort((a, b) => b.createdAt - a.createdAt);
+}

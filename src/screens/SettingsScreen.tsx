@@ -10,6 +10,7 @@ import { WHISPER_CATALOG } from '../services/constants';
 import { Whisper } from '../services/native';
 import type { MCPServerConfig } from '../types';
 import type { NostrMCPServerConfig } from '../services/nostr-mcp';
+import { discoverServers, type DiscoveredServer } from '../services/nostr-mcp';
 import { uid } from '../services/helpers';
 
 export const SettingsScreen: React.FC = React.memo(() => {
@@ -25,6 +26,9 @@ export const SettingsScreen: React.FC = React.memo(() => {
   const [nostrName, setNostrName] = useState('');
   const [nostrPubkey, setNostrPubkey] = useState('');
   const [nostrRelays, setNostrRelays] = useState('');
+  // Server discovery
+  const [discovering, setDiscovering] = useState(false);
+  const [discovered, setDiscovered] = useState<DiscoveredServer[]>([]);
 
   const ramMB = state.deviceInfo ? `${Math.round(state.deviceInfo.totalRamMB / 1024 * 10) / 10} GB` : '...';
   const storageGB = state.deviceInfo ? `${Math.round(state.deviceInfo.freeStorageGB * 10) / 10} GB free` : '...';
@@ -307,6 +311,67 @@ export const SettingsScreen: React.FC = React.memo(() => {
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Add & Connect (Nostr)</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Server discovery */}
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, marginBottom: 8 }}
+          disabled={discovering}
+          onPress={async () => {
+            setDiscovering(true);
+            setDiscovered([]);
+            try {
+              // Query the user's configured relays if any, else the default bootstrap relays.
+              const configured = nostrRelays.split(',').map(r => r.trim()).filter(Boolean);
+              const results = await discoverServers(configured.length ? configured : undefined);
+              setDiscovered(results);
+              if (results.length === 0) Alert.alert('No servers found', 'No ContextVM servers announced on these relays.');
+            } catch (e: any) {
+              Alert.alert('Discovery failed', e?.message || String(e));
+            } finally {
+              setDiscovering(false);
+            }
+          }}
+        >
+          {discovering ? (
+            <ActivityIndicator color={c.accent} size="small" />
+          ) : (
+            <Text style={{ color: c.accent, fontWeight: '600', fontSize: 13 }}>🔍 Discover servers</Text>
+          )}
+        </TouchableOpacity>
+
+        {discovered.length > 0 && (
+          <View style={{ marginBottom: 12, gap: 6 }}>
+            <Text style={{ color: c.textSecondary, fontSize: 12 }}>{discovered.length} server{discovered.length === 1 ? '' : 's'} found · tap to add</Text>
+            {discovered.map(d => {
+              const alreadyAdded = state.nostrServers.some(s => s.serverPubkey === d.pubkey);
+              return (
+                <TouchableOpacity
+                  key={d.pubkey}
+                  disabled={alreadyAdded}
+                  onPress={() => {
+                    const server: NostrMCPServerConfig = {
+                      id: `nostr_${uid()}`,
+                      name: d.name,
+                      enabled: false,
+                      serverPubkey: d.pubkey,
+                      relayUrls: [d.relayUrl],
+                    };
+                    dispatch({ type: 'ADD_NOSTR_SERVER', server });
+                    connectNostrServer(server).catch(() => {});
+                  }}
+                  style={{ borderWidth: 1, borderColor: c.border, borderRadius: 8, padding: 10, backgroundColor: c.bg, opacity: alreadyAdded ? 0.5 : 1 }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: c.textPrimary, fontWeight: '600', fontSize: 13 }}>{d.name}</Text>
+                    <Text style={{ color: alreadyAdded ? c.mutedText : c.accent, fontSize: 11 }}>{alreadyAdded ? 'Added' : 'Add →'}</Text>
+                  </View>
+                  {d.about ? <Text style={{ color: c.textSecondary, fontSize: 11, marginTop: 2 }} numberOfLines={2}>{d.about}</Text> : null}
+                  <Text style={{ color: c.mutedText, fontSize: 10, marginTop: 2, fontFamily: 'monospace' }} numberOfLines={1}>{d.pubkey.slice(0, 24)}… · {d.relayUrl}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Nostr server list */}
         {state.nostrServers.map(server => {
