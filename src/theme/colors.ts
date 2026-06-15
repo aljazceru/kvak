@@ -61,10 +61,8 @@ const LIGHT: ThemeColors = {
   codeBorder: '#CBD5E1',
 };
 
-const THEME_CACHE = { dark: DARK, light: LIGHT };
-
 export function getTheme(dark: boolean): ThemeColors {
-  return dark ? THEME_CACHE.dark : THEME_CACHE.light;
+  return dark ? DARK : LIGHT;
 }
 
 export function statusBarStyle(dark: boolean): 'light-content' | 'dark-content' {

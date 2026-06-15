@@ -87,31 +87,5 @@ export interface MCPTool extends MCPToolDef {
   serverName: string;
 }
 
-export interface MCPConnection {
-  serverId: string;
-  connected: boolean;
-  tools: MCPToolDef[];
-  serverInfo?: { name: string; version: string };
-  error?: string;
-}
-
-// ─── MCP over Nostr (ContextVM) ──────────────────────────────────────
-
-export type MCPServerType = 'http' | 'nostr';
-
-/** Unified server config that supports both HTTP and Nostr transports. */
-export interface UnifiedMCPServerConfig {
-  id: string;
-  name: string;
-  type: MCPServerType;
-  enabled: boolean;
-  // HTTP fields
-  url?: string;
-  apiKey?: string;
-  // Nostr fields
-  serverPubkey?: string;
-  relayUrls?: string[];
-}
-
-// Backwards compat: MCPServerConfig is the HTTP variant
-// NostrMCPServerConfig is re-exported from nostr-mcp.ts
+// Nostr MCP server config lives in services/nostr-mcp.ts (NostrMCPServerConfig).
+// MCPServerConfig above is the HTTP variant.

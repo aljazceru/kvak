@@ -3,7 +3,8 @@
  * Saves/loads conversations, settings, and model preferences.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Conversation, MCPServerConfig, UnifiedMCPServerConfig } from '../types';
+import type { Conversation, MCPServerConfig } from '../types';
+import type { NostrMCPServerConfig } from './nostr-mcp';
 
 const KEYS = {
   conversations: '@mangoqvac:conversations',
@@ -107,7 +108,7 @@ export async function saveMCPServers(servers: MCPServerConfig[]): Promise<void> 
 
 // ─── Nostr MCP Servers ──────────────────────────────────────────
 
-export async function loadNostrMCPServers(): Promise<UnifiedMCPServerConfig[]> {
+export async function loadNostrMCPServers(): Promise<NostrMCPServerConfig[]> {
   try {
     const raw = await AsyncStorage.getItem(KEYS.nostrMcpServers);
     if (raw) return JSON.parse(raw);
@@ -115,7 +116,7 @@ export async function loadNostrMCPServers(): Promise<UnifiedMCPServerConfig[]> {
   return [];
 }
 
-export async function saveNostrMCPServers(servers: UnifiedMCPServerConfig[]): Promise<void> {
+export async function saveNostrMCPServers(servers: NostrMCPServerConfig[]): Promise<void> {
   try {
     await AsyncStorage.setItem(KEYS.nostrMcpServers, JSON.stringify(servers));
   } catch {}

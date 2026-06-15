@@ -20,8 +20,4 @@ export const WHISPER_CATALOG: WhisperModelInfo[] = [
   { id: 'whisper-small', name: 'Small (English)', sizeMB: 300, description: 'Highest accuracy. Slower.', url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q8_0.bin', filename: 'ggml-small.en-q8_0.bin' },
 ];
 
-export const TOOL_PROMPT = `You can use tools by writing: [TOOL: tool_name {"param":"value"}]
-Available tools: calculator (expression), weather (location), search (query), datetime (no args).
-Use tools when helpful. After getting a tool result, continue naturally.`;
-
 export const SYSTEM_PROMPT_DEFAULT = 'You are Mango, a helpful AI running on-device.';

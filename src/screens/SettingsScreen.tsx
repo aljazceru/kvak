@@ -9,11 +9,12 @@ import { styles as s } from '../theme';
 import { WHISPER_CATALOG } from '../services/constants';
 import { formatBytes } from '../services/helpers';
 import { Whisper } from '../services/native';
-import type { MCPServerConfig, UnifiedMCPServerConfig } from '../types';
+import type { MCPServerConfig } from '../types';
+import type { NostrMCPServerConfig } from '../services/nostr-mcp';
 import { uid } from '../services/helpers';
 
 export const SettingsScreen: React.FC = React.memo(() => {
-  const { state, dispatch, modelPath, unloadModel, forceRender, connectMCPServer, disconnectMCPServer, connectNostrServer, disconnectNostrServer } = useApp();
+  const { state, dispatch, modelPath, unloadModel, connectMCPServer, disconnectMCPServer, connectNostrServer, disconnectNostrServer } = useApp();
   const c = getTheme(state.isDark);
 
   // HTTP MCP form
@@ -102,7 +103,6 @@ export const SettingsScreen: React.FC = React.memo(() => {
                     const ok = await Whisper.loadModel(modelPath(wm.filename));
                     if (ok) {
                       dispatch({ type: 'SET_WHISPER', loaded: true, modelId: wm.id });
-                      forceRender();
                     } else {
                       Alert.alert('Error', 'Failed to load whisper model');
                     }
@@ -293,10 +293,9 @@ export const SettingsScreen: React.FC = React.memo(() => {
               const relays = nostrRelays.split(',').map(r => r.trim()).filter(Boolean);
               if (!pubkey) { Alert.alert('Error', 'Enter a server public key'); return; }
               if (relays.length === 0) { Alert.alert('Error', 'Enter at least one relay URL'); return; }
-              const server: UnifiedMCPServerConfig = {
+              const server: NostrMCPServerConfig = {
                 id: `nostr_${uid()}`,
                 name,
-                type: 'nostr',
                 enabled: false,
                 serverPubkey: pubkey,
                 relayUrls: relays,

@@ -243,10 +243,6 @@ class NostrMCPClient {
     console.log(`[nostr-mcp] Client identity: ${this.clientPubkey.slice(0, 16)}...`);
   }
 
-  getClientPubkey(): string {
-    return this.clientPubkey;
-  }
-
   private getId(): number {
     return this.nextId++;
   }
@@ -524,15 +520,6 @@ class NostrMCPClient {
       }
     }
     return tools;
-  }
-
-  /** Disconnect all servers and close all relay connections. */
-  disconnectAll(): void {
-    this.connectedServerIds = [];
-    this.globalSubId = null;
-    this.connections.clear();
-    this.pendingRequests.clear();
-    this.relayPool.disconnect();
   }
 }
 

@@ -2,7 +2,7 @@
  * Mango × QVAC — Tool definitions & execution
  * Built-in tools + MCP remote tool routing (HTTP + Nostr).
  */
-import type { ToolCall, MCPServerConfig, UnifiedMCPServerConfig } from '../types';
+import type { ToolCall, MCPServerConfig } from '../types';
 import { mcpClient } from './mcp';
 import { nostrMcpClient } from './nostr-mcp';
 import type { NostrMCPServerConfig } from './nostr-mcp';

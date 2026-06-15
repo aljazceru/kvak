@@ -74,7 +74,6 @@ class SSETransport {
   private headers: Record<string, string> = {};
   private parser = new SSEParser();
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  private connected = false;
 
   async connect(url: string, headers: Record<string, string>): Promise<void> {
     this.baseUrl = url;
@@ -106,7 +105,6 @@ class SSETransport {
             this.messageUrl = ev.data.startsWith('http')
               ? ev.data
               : this.baseUrl.replace(/\/sse$/, '') + ev.data;
-            this.connected = true;
             if (!settled) { settled = true; clearTimeout(timer); resolve(); }
             continue;
           }
@@ -173,7 +171,6 @@ class SSETransport {
   close() {
     this.xhr?.abort();
     this.xhr = null;
-    this.connected = false;
     this.parser.reset();
     (this as any)._lastLen = 0;
     for (const [, { reject, timer }] of this.pending) {
@@ -398,13 +395,6 @@ class MCPClient {
       }
     }
     return tools;
-  }
-
-  /** Disconnect all servers. */
-  disconnectAll() {
-    for (const [id] of this.transports) {
-      this.disconnect(id);
-    }
   }
 }
 

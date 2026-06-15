@@ -26,7 +26,6 @@ export const Llama = NativeModules.LlamaModule as {
 
 export const Speech = NativeModules.SpeechModule as {
   isTTSReady(): Promise<boolean>;
-  getTTSEngines(): Promise<Array<{ name: string; label: string }>>;
   speak(text: string): Promise<void>;
   stopSpeaking(): Promise<void>;
   startListening(): Promise<void>;

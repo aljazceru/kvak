@@ -11,7 +11,7 @@ import { formatBytes } from '../services/helpers';
 import { Llama } from '../services/native';
 
 export const ModelPickerScreen: React.FC = React.memo(() => {
-  const { state, dispatch, modelPath, forceRender } = useApp();
+  const { state, dispatch, modelPath } = useApp();
   const [loading, setLoading] = useState<string | null>(null);
   const c = getTheme(state.isDark);
 
@@ -105,7 +105,6 @@ export const ModelPickerScreen: React.FC = React.memo(() => {
                         await Llama?.free();
                         dispatch({ type: 'SET_MODEL_LOADED', loaded: false, modelId: '', template: '' });
                       }
-                      forceRender();
                     },
                   },
                 ])}

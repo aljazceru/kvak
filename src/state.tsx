@@ -3,10 +3,10 @@
  * All mutable state lives here instead of module-level variables.
  */
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
-import { NativeEventEmitter, NativeModules, Alert, Clipboard, Keyboard } from 'react-native';
-import type { Conversation, Message, DeviceInfo, DownloadProgress, Screen, MCPServerConfig, MCPTool, UnifiedMCPServerConfig } from './types';
+import { NativeEventEmitter, Alert, Clipboard } from 'react-native';
+import type { Conversation, Message, DeviceInfo, DownloadProgress, Screen, MCPServerConfig, MCPTool } from './types';
 import { Llama, Speech, Whisper } from './services/native';
-import { MODEL_CATALOG, WHISPER_CATALOG, TOOL_PROMPT, SYSTEM_PROMPT_DEFAULT } from './services/constants';
+import { MODEL_CATALOG, WHISPER_CATALOG, SYSTEM_PROMPT_DEFAULT } from './services/constants';
 import { buildPrompt } from './services/templates';
 import { processToolCalls, buildToolPrompt } from './services/tools';
 import { mcpClient } from './services/mcp';
@@ -44,7 +44,7 @@ interface AppState {
   mcpTools: MCPTool[];
   mcpConnecting: Set<string>;
   // Nostr MCP (ContextVM)
-  nostrServers: UnifiedMCPServerConfig[];
+  nostrServers: NostrMCPServerConfig[];
   nostrTools: MCPTool[];
   nostrConnecting: Set<string>;
 }
@@ -103,10 +103,10 @@ type Action =
   | { type: 'SET_MCP_TOOLS'; tools: MCPTool[] }
   | { type: 'SET_MCP_CONNECTING'; id: string; connecting: boolean }
   // Nostr MCP
-  | { type: 'SET_NOSTR_SERVERS'; servers: UnifiedMCPServerConfig[] }
-  | { type: 'ADD_NOSTR_SERVER'; server: UnifiedMCPServerConfig }
+  | { type: 'SET_NOSTR_SERVERS'; servers: NostrMCPServerConfig[] }
+  | { type: 'ADD_NOSTR_SERVER'; server: NostrMCPServerConfig }
   | { type: 'REMOVE_NOSTR_SERVER'; id: string }
-  | { type: 'UPDATE_NOSTR_SERVER'; id: string; patch: Partial<UnifiedMCPServerConfig> }
+  | { type: 'UPDATE_NOSTR_SERVER'; id: string; patch: Partial<NostrMCPServerConfig> }
   | { type: 'SET_NOSTR_TOOLS'; tools: MCPTool[] }
   | { type: 'SET_NOSTR_CONNECTING'; id: string; connecting: boolean };
 
@@ -258,13 +258,12 @@ interface AppContextValue {
   exportConversation: (id: string) => void;
   unloadModel: () => Promise<void>;
   modelPath: (filename: string) => string;
-  forceRender: () => void;
   /** Connect to an HTTP MCP server */
   connectMCPServer: (config: MCPServerConfig) => Promise<void>;
   /** Disconnect from an HTTP MCP server */
   disconnectMCPServer: (id: string) => void;
   /** Connect to a Nostr MCP server */
-  connectNostrServer: (config: UnifiedMCPServerConfig) => Promise<void>;
+  connectNostrServer: (config: NostrMCPServerConfig) => Promise<void>;
   /** Disconnect from a Nostr MCP server */
   disconnectNostrServer: (id: string) => void;
   /** Get the tool prompt including all MCP tools */
@@ -287,8 +286,6 @@ const emitter = new NativeEventEmitter();
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const renderTick = useRef(0);
-  const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
 
   // Model directory resolution
   const modelDirRef = useRef('/data/data/com.mangoqvac/files');
@@ -389,10 +386,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_MODEL_LOADED', loaded: false, modelId: '', template: '' });
   }
 
-  function forceRender() {
-    forceUpdate();
-  }
-
   // ─── HTTP MCP Actions ──────────────────────────────────────────────
 
   async function connectMCPServer(config: MCPServerConfig) {
@@ -425,7 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Nostr MCP Actions (ContextVM) ─────────────────────────────────
 
-  async function connectNostrServer(config: UnifiedMCPServerConfig) {
+  async function connectNostrServer(config: NostrMCPServerConfig) {
     if (!config.serverPubkey || !config.relayUrls?.length) {
       Alert.alert('Invalid Config', 'Nostr MCP server requires a pubkey and at least one relay URL.');
       return;
@@ -433,15 +426,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     dispatch({ type: 'SET_NOSTR_CONNECTING', id: config.id, connecting: true });
     try {
-      const nostrConfig: NostrMCPServerConfig = {
-        id: config.id,
-        name: config.name,
-        serverPubkey: config.serverPubkey,
-        relayUrls: config.relayUrls,
-        enabled: false,
-      };
-
-      const conn = await nostrMcpClient.connect(nostrConfig);
+      const conn = await nostrMcpClient.connect(config);
       if (conn.connected) {
         dispatch({ type: 'UPDATE_NOSTR_SERVER', id: config.id, patch: { enabled: true } });
       } else {
@@ -477,15 +462,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function executeToolCalls(response: string, toolsEnabled: boolean) {
-    // Convert unified nostr servers to the format expected by processToolCalls
-    const nostrConfigs: NostrMCPServerConfig[] = state.nostrServers.map(s => ({
-      id: s.id,
-      name: s.name,
-      serverPubkey: s.serverPubkey || '',
-      relayUrls: s.relayUrls || [],
-      enabled: s.enabled,
-    }));
-    return processToolCalls(response, toolsEnabled, state.mcpServers, nostrConfigs);
+    return processToolCalls(response, toolsEnabled, state.mcpServers, state.nostrServers);
   }
 
   // ─── Init ─────────────────────────────────────────────────────────
@@ -617,7 +594,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     state, dispatch,
     openConversation, newConversation, deleteConversation,
     forkConversation, exportConversation, unloadModel,
-    modelPath, forceRender,
+    modelPath,
     connectMCPServer, disconnectMCPServer,
     connectNostrServer, disconnectNostrServer,
     getToolPrompt, executeToolCalls,
