@@ -1,15 +1,15 @@
 /**
- * Mango × QVAC — Conversation List Screen
+ * Kvak — Conversation List Screen
  */
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, Modal, Pressable } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, Modal, Pressable, Alert } from 'react-native';
 import { useApp } from '../state';
 import { getTheme } from '../theme';
 import { relativeTime } from '../services/helpers';
 import { styles as s } from '../theme';
 
 export const ConversationListScreen: React.FC = React.memo(() => {
-  const { state, dispatch, openConversation, forkConversation, exportConversation } = useApp();
+  const { state, dispatch, openConversation, forkConversation, exportConversation, deleteConversation } = useApp();
   const c = getTheme(state.isDark);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -99,7 +99,7 @@ export const ConversationListScreen: React.FC = React.memo(() => {
   if (convIds.length === 0) {
     return (
       <View style={s.emptyState}>
-        <Text style={[s.emptyTitle, { color: c.textPrimary }]}>Mango × QVAC</Text>
+        <Text style={[s.emptyTitle, { color: c.textPrimary }]}>Kvak</Text>
         <Text style={[s.emptySub, { color: c.textSecondary }]}>On-device AI. Private by default.</Text>
         <Text style={[s.emptyHint, { color: c.accent }]}>Tap ＋ to start</Text>
       </View>
@@ -135,9 +135,26 @@ export const ConversationListScreen: React.FC = React.memo(() => {
               { label: 'Rename', action: () => { if (sheetId) { setRenamingId(sheetId); setRenameText(state.convs[sheetId]?.title || ''); } } },
               { label: 'Export', action: () => { if (sheetId) exportConversation(sheetId); } },
               { label: 'Fork', action: () => { if (sheetId) forkConversation(sheetId); } },
+              { label: 'Delete', action: () => {
+                  if (!sheetId) return;
+                  const id = sheetId;
+                  const title = state.convs[id]?.title || 'this conversation';
+                  Alert.alert(
+                    `Delete "${title}"?`,
+                    'This will permanently remove the conversation and all its messages. This cannot be undone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: () => deleteConversation(id),
+                      },
+                    ]
+                  );
+                } },
             ].map(opt => (
               <TouchableOpacity key={opt.label} style={{ paddingVertical: 15, borderBottomWidth: 1, borderColor: c.border }} onPress={() => { setSheetId(null); opt.action(); }}>
-                <Text style={{ color: c.textPrimary, fontSize: 15 }}>{opt.label}</Text>
+                <Text style={{ color: opt.label === 'Delete' ? c.destructive : c.textPrimary, fontSize: 15 }}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={{ paddingVertical: 15, alignItems: 'center', marginTop: 6 }} onPress={() => setSheetId(null)}>

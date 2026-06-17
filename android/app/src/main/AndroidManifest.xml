@@ -11,9 +11,9 @@
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- RAG now primarily uses SAF (Storage Access Framework) document/folder pickers (see LlamaModule pickDocument/pickDirectory + list/readSaf). The legacy path input + READ_EXTERNAL was removed for better UX. Permission kept only if future path fallback or other features need it. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
       android:name=".MainApplication"

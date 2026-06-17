@@ -35,11 +35,11 @@ node relay.mjs
 
 # 2. gateway (terminal 2) — from your @contextvm/sdk checkout
 export GATEWAY_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex')")
-bun run /path/to/mango-qvac/mobile/examples/contextvm/gateway.ts
+bun run /path/to/kvak/mobile/examples/contextvm/gateway.ts
 #   → prints the gateway pubkey. Keep GATEWAY_KEY stable to reuse the same pubkey.
 
 # 3. in the app: Settings → Nostr MCP Servers
-#      name:    Mango Test
+#      name:    Kvak Test
 #      pubkey:  <the gateway pubkey printed above>
 #      relays:  ws://<this-machine-LAN-ip>:8777
 #    → Add & Connect. You should see "2 tools: echo, add".

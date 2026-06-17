@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext is permitted globally because it is load-bearing for documented
+     features: user-supplied HTTP MCP servers (http://192.168.x.x or arbitrary
+     hosts) and ws:// Nostr relays. Hosts are entered at runtime, so per-domain
+     narrowing would silently break those transports. Risk is limited to traffic
+     the user explicitly configures; HuggingFace model downloads are https. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>

@@ -4,14 +4,14 @@
 
 #include "whisper.h"
 
-#define LOG_TAG "MangoQVAC"
+#define LOG_TAG "Kvak"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 static struct whisper_context *g_whisper_ctx = nullptr;
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_mangoqvac_WhisperBridge_nativeLoadModel(JNIEnv *env, jobject thiz, jstring model_path) {
+Java_com_kvak_WhisperBridge_nativeLoadModel(JNIEnv *env, jobject thiz, jstring model_path) {
     const char *path = env->GetStringUTFChars(model_path, nullptr);
     LOGI("Whisper: loading model: %s", path);
 
@@ -30,7 +30,7 @@ Java_com_mangoqvac_WhisperBridge_nativeLoadModel(JNIEnv *env, jobject thiz, jstr
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_mangoqvac_WhisperBridge_nativeTranscribe(JNIEnv *env, jobject thiz, jbyteArray pcm_data, jint sample_rate) {
+Java_com_kvak_WhisperBridge_nativeTranscribe(JNIEnv *env, jobject thiz, jbyteArray pcm_data, jint sample_rate) {
     if (!g_whisper_ctx) {
         return env->NewStringUTF("Error: whisper model not loaded");
     }
@@ -82,7 +82,7 @@ Java_com_mangoqvac_WhisperBridge_nativeTranscribe(JNIEnv *env, jobject thiz, jby
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_mangoqvac_WhisperBridge_nativeFreeModel(JNIEnv *env, jobject thiz) {
+Java_com_kvak_WhisperBridge_nativeFreeModel(JNIEnv *env, jobject thiz) {
     if (g_whisper_ctx) {
         whisper_free(g_whisper_ctx);
         g_whisper_ctx = nullptr;

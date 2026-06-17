@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Model Picker Screen
+ * Kvak — Model Picker Screen
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';

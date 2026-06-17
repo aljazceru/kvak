@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — AsyncStorage persistence layer
+ * Kvak — AsyncStorage persistence layer
  * Saves/loads conversations, settings, and model preferences.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,12 +7,15 @@ import type { Conversation, MCPServerConfig } from '../types';
 import type { NostrMCPServerConfig } from './nostr-mcp';
 
 const KEYS = {
-  conversations: '@mangoqvac:conversations',
-  theme: '@mangoqvac:theme',
-  whisperModel: '@mangoqvac:whisperModel',
-  mcpServers: '@mangoqvac:mcpServers',
-  nostrMcpServers: '@mangoqvac:nostrMcpServers',
-  loadedModel: '@mangoqvac:loadedModel',
+  conversations: '@kvak:conversations',
+  theme: '@kvak:theme',
+  whisperModel: '@kvak:whisperModel',
+  mcpServers: '@kvak:mcpServers',
+  nostrMcpServers: '@kvak:nostrMcpServers',
+  loadedModel: '@kvak:loadedModel',
+  documents: '@kvak:documents',
+  ragVectors: '@kvak:ragVectors',
+  embedModel: '@kvak:embedModel',
 };
 
 /**
@@ -135,5 +138,35 @@ export async function saveLoadedModel(filename: string | null): Promise<void> {
   try {
     if (filename) await AsyncStorage.setItem(KEYS.loadedModel, filename);
     else await AsyncStorage.removeItem(KEYS.loadedModel);
+  } catch {}
+}
+
+export async function loadDocuments() {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.documents);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+export async function saveDocuments(docs: any[]) {
+  try { await AsyncStorage.setItem(KEYS.documents, JSON.stringify(docs)); } catch {}
+}
+
+export async function loadRagVectors() {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.ragVectors);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+export async function saveRagVectors(vectors: any) {
+  try { await AsyncStorage.setItem(KEYS.ragVectors, JSON.stringify(vectors)); } catch {}
+}
+
+export async function loadEmbedModelId(): Promise<string | null> {
+  try { return await AsyncStorage.getItem(KEYS.embedModel); } catch { return null; }
+}
+export async function saveEmbedModelId(id: string | null) {
+  try {
+    if (id) await AsyncStorage.setItem(KEYS.embedModel, id);
+    else await AsyncStorage.removeItem(KEYS.embedModel);
   } catch {}
 }

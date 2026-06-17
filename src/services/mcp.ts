@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — MCP (Model Context Protocol) Client
+ * Kvak — MCP (Model Context Protocol) Client
  *
  * Connects to remote MCP servers, discovers tools, and executes them.
  * Supports both Streamable HTTP and SSE transports with auto-detection.
@@ -35,7 +35,7 @@ interface JSONRPCResponse {
 
 // ─── SSE Parser ────────────────────────────────────────────────────
 
-class SSEParser {
+export class SSEParser {
   private buffer = '';
 
   /** Feed a chunk of text, return complete events. */
@@ -289,7 +289,7 @@ class MCPClient {
           params: {
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: {},
-            clientInfo: { name: 'mango-qvac', version: '1.0.0' },
+            clientInfo: { name: 'kvak', version: '1.0.0' },
           },
         });
         conn.serverInfo = initResult?.serverInfo;
@@ -314,7 +314,7 @@ class MCPClient {
           params: {
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: {},
-            clientInfo: { name: 'mango-qvac', version: '1.0.0' },
+            clientInfo: { name: 'kvak', version: '1.0.0' },
           },
         });
         conn.serverInfo = initResult?.serverInfo;

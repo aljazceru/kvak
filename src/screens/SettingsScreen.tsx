@@ -1,12 +1,12 @@
 /**
- * Mango × QVAC — Settings Screen
+ * Kvak — Settings Screen
  */
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, Switch } from 'react-native';
 import { useApp } from '../state';
 import { getTheme } from '../theme';
 import { styles as s } from '../theme';
-import { WHISPER_CATALOG } from '../services/constants';
+import { WHISPER_CATALOG, EMBED_CATALOG } from '../services/constants';
 import { Whisper } from '../services/native';
 import type { MCPServerConfig } from '../types';
 import type { NostrMCPServerConfig } from '../services/nostr-mcp';
@@ -14,7 +14,7 @@ import { discoverServers, type DiscoveredServer } from '../services/nostr-mcp';
 import { uid } from '../services/helpers';
 
 export const SettingsScreen: React.FC = React.memo(() => {
-  const { state, dispatch, modelPath, unloadModel, connectMCPServer, disconnectMCPServer, connectNostrServer, disconnectNostrServer } = useApp();
+  const { state, dispatch, modelPath, unloadModel, connectMCPServer, disconnectMCPServer, connectNostrServer, disconnectNostrServer, loadEmbedModel, freeEmbedModel } = useApp();
   const c = getTheme(state.isDark);
 
   // HTTP MCP form
@@ -29,9 +29,6 @@ export const SettingsScreen: React.FC = React.memo(() => {
   // Server discovery
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState<DiscoveredServer[]>([]);
-
-  const ramMB = state.deviceInfo ? `${Math.round(state.deviceInfo.totalRamMB / 1024 * 10) / 10} GB` : '...';
-  const storageGB = state.deviceInfo ? `${Math.round(state.deviceInfo.freeStorageGB * 10) / 10} GB free` : '...';
 
   return (
     <ScrollView style={s.flex} contentContainerStyle={s.settingsContent}>
@@ -50,7 +47,7 @@ export const SettingsScreen: React.FC = React.memo(() => {
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
           <TouchableOpacity
             style={{ flex: 1, backgroundColor: c.accent, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
-            onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'model_picker' })}
+            onPress={() => dispatch({ type: 'NAVIGATE', screen: 'model_picker' })}
           >
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Model Library</Text>
           </TouchableOpacity>
@@ -62,14 +59,17 @@ export const SettingsScreen: React.FC = React.memo(() => {
         </View>
       </View>
 
-      {/* Device */}
-      <Text style={[s.sectionTitle, { color: c.textSecondary }]}>Device</Text>
-      <View style={[s.deviceCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <Text style={[s.deviceRow, { color: c.textSecondary }]}>RAM: {ramMB}</Text>
-        <Text style={[s.deviceRow, { color: c.textSecondary }]}>Storage: {storageGB}</Text>
-        <Text style={[s.deviceRow, { color: c.textSecondary }]}>{state.deviceInfo?.device || 'Android'}</Text>
-        <Text style={[s.deviceRow, { color: c.textSecondary }]}>Cores: {state.deviceInfo?.cores || '?'}</Text>
-      </View>
+      {/* RAG / Documents (full local RAG) */}
+      <TouchableOpacity onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'documents' })} style={[s.modelStatusCard, { backgroundColor: c.surface, borderColor: c.accent, marginVertical: 8 }]}>
+        <Text style={{ color: c.textPrimary, fontWeight: '600' }}>📄 Document Library (RAG)</Text>
+        <Text style={{ color: c.textSecondary, fontSize: 12 }}>Ingest text/PDFs, semantic search in chat. {state.documents.length} docs loaded.</Text>
+      </TouchableOpacity>
+
+      {/* Security demo (full: PIN, duress, onboarding) */}
+      <TouchableOpacity onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'lock' })} style={[s.modelStatusCard, { backgroundColor: c.surface, borderColor: c.destructive, marginVertical: 8 }]}>
+        <Text style={{ color: c.textPrimary, fontWeight: '600' }}>🔒 Lock / Security (demo)</Text>
+        <Text style={{ color: c.textSecondary, fontSize: 12 }}>PIN 1234 / duress 0000 (wipes docs). Full in roadmap Phase 5-6.</Text>
+      </TouchableOpacity>
 
       {/* STT */}
       <Text style={[s.sectionTitle, { color: c.textSecondary }]}>Voice Input (STT)</Text>
@@ -123,6 +123,38 @@ export const SettingsScreen: React.FC = React.memo(() => {
                   ) : (
                     <Text style={[s.whisperDLText, { color: c.green }]}>Download ({wm.sizeMB} MB)</Text>
                   )}
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Embeddings for RAG (on-device, independent of LLM) */}
+      <Text style={[s.sectionTitle, { color: c.textSecondary }]}>Embeddings (for RAG)</Text>
+      <View style={[s.modelStatusCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+        <View style={s.modelStatusRow}>
+          <Text style={[s.modelStatusIcon, { color: state.embedLoaded ? c.green : c.mutedText }]}>{state.embedLoaded ? '●' : '○'}</Text>
+          <View style={s.modelStatusInfo}>
+            <Text style={[s.modelStatusName, { color: c.textPrimary }]}>{state.embedLoaded ? state.embedModelId : 'No embed model loaded'}</Text>
+            <Text style={[s.modelStatusDetail, { color: c.textSecondary }]}>Required for semantic search over your documents.</Text>
+          </View>
+        </View>
+        {EMBED_CATALOG.map(em => {
+          const isLoaded = state.embedLoaded && state.embedModelId === em.filename;
+          return (
+            <View key={em.id} style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: c.textPrimary, fontSize: 14 }}>{em.name} ({em.sizeMB}MB)</Text>
+              {isLoaded ? (
+                <TouchableOpacity onPress={async () => { await freeEmbedModel(); }} style={[s.modelGhostBtn, { backgroundColor: c.border }]}>
+                  <Text style={{ color: c.textPrimary, fontSize: 12 }}>Unload</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={async () => {
+                  const ok = await loadEmbedModel(em.filename);
+                  if (!ok) Alert.alert('Load Embed Failed', 'Make sure the embed GGUF is downloaded to filesDir (use Model Library or adb push). Check logs.');
+                }} style={[s.modelPrimaryBtn, { backgroundColor: c.accent }]}>
+                  <Text style={{ color: '#fff', fontSize: 12 }}>Load Embed</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -459,7 +491,7 @@ export const SettingsScreen: React.FC = React.memo(() => {
       {/* About */}
       <Text style={[s.sectionTitle, { color: c.textSecondary }]}>About</Text>
       <View style={[s.aboutCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <Text style={[s.aboutTitle, { color: c.textPrimary }]}>Mango × QVAC</Text>
+        <Text style={[s.aboutTitle, { color: c.textPrimary }]}>Kvak</Text>
         <Text style={[s.aboutText, { color: c.textSecondary }]}>
           Local AI on your phone via llama.cpp. No data leaves your device.
         </Text>

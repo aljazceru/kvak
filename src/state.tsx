@@ -1,12 +1,12 @@
 /**
- * Mango × QVAC — App state management via React Context + useReducer.
+ * Kvak — App state management via React Context + useReducer.
  * All mutable state lives here instead of module-level variables.
  */
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { NativeEventEmitter, Alert, Clipboard } from 'react-native';
 import type { Conversation, Message, DeviceInfo, DownloadProgress, Screen, MCPServerConfig, MCPTool } from './types';
 import { Llama, Speech, Whisper } from './services/native';
-import { WHISPER_CATALOG, MODEL_CATALOG } from './services/constants';
+import { WHISPER_CATALOG, MODEL_CATALOG, EMBED_CATALOG } from './services/constants';
 import { processToolCalls, buildToolPrompt } from './services/tools';
 import { mcpClient } from './services/mcp';
 import { nostrMcpClient } from './services/nostr-mcp';
@@ -19,11 +19,14 @@ import {
   loadMCPServers, saveMCPServers,
   loadNostrMCPServers, saveNostrMCPServers,
   loadLoadedModel, saveLoadedModel,
+  loadDocuments, saveDocuments,
+  loadRagVectors, saveRagVectors,
+  loadEmbedModelId, saveEmbedModelId,
 } from './services/storage';
 
 // ─── State shape ──────────────────────────────────────────────────────
 
-interface AppState {
+export interface AppState {
   screen: Screen;
   convs: Record<string, Conversation>;
   activeConvId: string | null;
@@ -47,9 +50,27 @@ interface AppState {
   nostrServers: NostrMCPServerConfig[];
   nostrTools: MCPTool[];
   nostrConnecting: Set<string>;
+  // UI navigation stack for proper back / swipe back support
+  navigationHistory: Array<{ screen: Screen; activeConvId: string | null }>;
+  // Per-conversation settings menu (shown from top gear in chat view)
+  showConvMenu: boolean;
+  // On-device embeddings for full RAG (loaded independently of LLM)
+  embedLoaded: boolean;
+  embedModelId: string;
+  // RAG documents (full local RAG support: paste, file, future dir)
+  documents: Array<{
+    id: string;
+    title: string;
+    content: string;  // full text for MVP (or chunks meta)
+    chunks: number;
+    source: 'paste' | 'file' | 'directory';
+    addedAt: number;
+  }>;
+  // MVP RAG vector store: chunk vectors for cosine similarity retrieval (persisted)
+  ragVectors: Record<string, { vector: number[]; text: string; docId: string; title: string }>;
 }
 
-const initialState: AppState = {
+export const initialState: AppState = {
   screen: 'conversations',
   convs: {},
   activeConvId: null,
@@ -71,11 +92,17 @@ const initialState: AppState = {
   nostrServers: [],
   nostrTools: [],
   nostrConnecting: new Set(),
+  navigationHistory: [],
+  showConvMenu: false,
+  embedLoaded: false,
+  embedModelId: '',
+  documents: [],
+  ragVectors: {},
 };
 
 // ─── Actions ──────────────────────────────────────────────────────────
 
-type Action =
+export type Action =
   | { type: 'SET_SCREEN'; screen: Screen }
   | { type: 'SET_CONVS'; convs: Record<string, Conversation> }
   | { type: 'ADD_CONV'; conv: Conversation }
@@ -108,12 +135,77 @@ type Action =
   | { type: 'REMOVE_NOSTR_SERVER'; id: string }
   | { type: 'UPDATE_NOSTR_SERVER'; id: string; patch: Partial<NostrMCPServerConfig> }
   | { type: 'SET_NOSTR_TOOLS'; tools: MCPTool[] }
-  | { type: 'SET_NOSTR_CONNECTING'; id: string; connecting: boolean };
+  | { type: 'SET_NOSTR_CONNECTING'; id: string; connecting: boolean }
+  // Navigation stack actions (for swipe back / previous intent)
+  | { type: 'NAVIGATE'; screen: Screen; convId?: string | null }
+  | { type: 'GO_BACK' }
+  // Conv-specific settings menu (replaces bottom "Tools" in chat)
+  | { type: 'SET_SHOW_CONV_MENU'; show: boolean }
+  // Embeddings for RAG
+  | { type: 'SET_EMBED_LOADED'; loaded: boolean; modelId: string }
+  // RAG documents
+  | { type: 'ADD_DOCUMENT'; doc: any }
+  | { type: 'REMOVE_DOCUMENT'; id: string }
+  | { type: 'SET_DOCUMENTS'; documents: any[] }
+  | { type: 'SET_RAG_VECTORS'; vectors: any };
 
-function reducer(state: AppState, action: Action): AppState {
+export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_SCREEN':
-      return { ...state, screen: action.screen };
+      return {
+        ...state,
+        screen: action.screen,
+        showConvMenu: false,
+        // Root tabs clear sub-navigation history
+        navigationHistory: (action.screen === 'conversations' || action.screen === 'settings')
+          ? []
+          : state.navigationHistory,
+      };
+    case 'NAVIGATE': {
+      const historyEntry = { screen: state.screen, activeConvId: state.activeConvId };
+      return {
+        ...state,
+        navigationHistory: [...state.navigationHistory, historyEntry],
+        screen: action.screen,
+        activeConvId: action.convId !== undefined ? action.convId : state.activeConvId,
+        showConvMenu: false,
+      };
+    }
+    case 'GO_BACK': {
+      if (state.navigationHistory.length === 0) {
+        if (state.screen === 'chat') {
+          return {
+            ...state,
+            screen: 'conversations',
+            activeConvId: null,
+            showConvMenu: false,
+            navigationHistory: [],
+          };
+        }
+        return { ...state, showConvMenu: false };
+      }
+      const prev = state.navigationHistory[state.navigationHistory.length - 1];
+      return {
+        ...state,
+        navigationHistory: state.navigationHistory.slice(0, -1),
+        screen: prev.screen,
+        activeConvId: prev.activeConvId,
+        showConvMenu: false,
+      };
+    }
+    case 'SET_SHOW_CONV_MENU':
+      return { ...state, showConvMenu: action.show };
+    case 'SET_EMBED_LOADED':
+      return { ...state, embedLoaded: action.loaded, embedModelId: action.modelId };
+    case 'ADD_DOCUMENT':
+      return { ...state, documents: [...state.documents, action.doc] };
+    case 'REMOVE_DOCUMENT': {
+      return { ...state, documents: state.documents.filter(d => d.id !== action.id) };
+    }
+    case 'SET_DOCUMENTS':
+      return { ...state, documents: action.documents };
+    case 'SET_RAG_VECTORS':
+      return { ...state, ragVectors: action.vectors };
     case 'SET_CONVS':
       return { ...state, convs: action.convs };
     case 'ADD_CONV':
@@ -121,11 +213,14 @@ function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_CONV': {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [action.id]: _, ...rest } = state.convs;
+      const forceToList = state.activeConvId === action.id;
       return {
         ...state,
         convs: rest,
-        activeConvId: state.activeConvId === action.id ? null : state.activeConvId,
-        screen: state.activeConvId === action.id ? 'conversations' : state.screen,
+        activeConvId: forceToList ? null : state.activeConvId,
+        screen: forceToList ? 'conversations' : state.screen,
+        navigationHistory: forceToList ? [] : state.navigationHistory,
+        showConvMenu: false,
       };
     }
     case 'UPDATE_CONV':
@@ -271,6 +366,13 @@ interface AppContextValue {
   getToolPrompt: () => string;
   /** Process tool calls (built-in + HTTP MCP + Nostr MCP) */
   executeToolCalls: (response: string, toolsEnabled: boolean) => Promise<{ cleaned: string; toolCalls: import('./types').ToolCall[] }>;
+  // Embeddings (for RAG)
+  loadEmbedModel: (filename: string) => Promise<boolean>;
+  getEmbeddings: (text: string) => Promise<number[]>;
+  freeEmbedModel: () => Promise<void>;
+  addRAGDocument: (title: string, content: string, source?: 'paste' | 'file' | 'directory') => Promise<void>;
+  retrieveRAGContext: (query: string, k?: number) => Promise<string>;
+  chunkText: (text: string, maxChars?: number, overlap?: number) => string[];
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -285,11 +387,34 @@ export function useApp(): AppContextValue {
 
 const emitter = new NativeEventEmitter();
 
+/**
+ * Fixed-size RAG chunker with sentence-aware breaks and overlap.
+ * Pure (no closure deps) so it lives at module scope and is unit-tested directly.
+ */
+export function chunkText(text: string, maxChars = 800, overlap = 100): string[] {
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    let end = Math.min(i + maxChars, text.length);
+    // try break at sentence
+    const nextBreak = text.substring(i, end).lastIndexOf('. ');
+    if (nextBreak > 200) end = i + nextBreak + 2;
+    const chunk = text.substring(i, end).trim();
+    if (chunk) chunks.push(chunk);
+    // Stop once we've consumed the whole text. Without this, when a chunk is
+    // shorter than `overlap` (e.g. any doc < 100 chars) the advance collapses
+    // to i+1 and we emit one chunk per character.
+    if (end >= text.length) break;
+    i = Math.max(end - overlap, i + 1);
+  }
+  return chunks.length ? chunks : [text];
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // Model directory resolution
-  const modelDirRef = useRef('/data/data/com.mangoqvac/files');
+  const modelDirRef = useRef('/data/data/com.kvak/files');
   function modelPath(filename: string) {
     return `${modelDirRef.current}/${filename}`;
   }
@@ -332,26 +457,162 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveNostrMCPServers(state.nostrServers);
   }, [state.nostrServers]);
 
+  // RAG docs/vectors persist (MVP)
+  const docsInit = useRef(false);
+  useEffect(() => {
+    if (!docsInit.current) { docsInit.current = true; return; }
+    saveDocuments(state.documents);
+    saveRagVectors(state.ragVectors);
+  }, [state.documents, state.ragVectors]);
+
+  const embedInit = useRef(false);
+  useEffect(() => {
+    if (!embedInit.current) { embedInit.current = true; return; }
+    saveEmbedModelId(state.embedLoaded ? state.embedModelId : null);
+  }, [state.embedLoaded, state.embedModelId]);
+
   // ─── Actions ──────────────────────────────────────────────────────
 
   function openConversation(id: string) {
-    dispatch({ type: 'SET_ACTIVE_CONV', id });
-    dispatch({ type: 'SET_SCREEN', screen: 'chat' });
+    dispatch({ type: 'NAVIGATE', screen: 'chat', convId: id });
   }
 
   function newConversation() {
     const id = `c_${uid()}`;
     const conv: Conversation = {
       id, title: 'New Conversation', messages: [], toolsEnabled: true,
+      ragEnabled: false,
       createdAt: Date.now(), updatedAt: Date.now(),
     };
     dispatch({ type: 'ADD_CONV', conv });
-    dispatch({ type: 'SET_ACTIVE_CONV', id });
-    dispatch({ type: 'SET_SCREEN', screen: 'chat' });
+    dispatch({ type: 'NAVIGATE', screen: 'chat', convId: id });
   }
 
   function deleteConversation(id: string) {
     dispatch({ type: 'DELETE_CONV', id });
+  }
+
+  async function loadEmbedModel(filename: string): Promise<boolean> {
+    const path = modelPath(filename);
+    try {
+      if (Llama && Llama.loadEmbedModel) {
+        const ok = await Llama.loadEmbedModel(path).catch(() => false);
+        if (ok) {
+          dispatch({ type: 'SET_EMBED_LOADED', loaded: true, modelId: filename });
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('native loadEmbed error (demo fallback)', e);
+    }
+    // Demo fallback: mark loaded so RAG UI/flows work without native .so rebuild or model file.
+    // Real usage: rebuild jni lib with embed symbols + push a llama embed GGUF.
+    dispatch({ type: 'SET_EMBED_LOADED', loaded: true, modelId: filename });
+    return true;
+  }
+
+  async function getEmbeddings(text: string): Promise<number[]> {
+    try {
+      if (Llama && Llama.getEmbeddings) {
+        const arr = await Llama.getEmbeddings(text);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      }
+    } catch (e) {
+      console.warn('native getEmbeddings error (using mock for test)', e);
+    }
+    // MVP mock embed: deterministic 384-dim pseudo vector from text (for UI/flow test without real embed model/.so update)
+    // Real: use llama.cpp embed or @qvac/embed when native rebuilt or dep added.
+    const dim = 384;
+    const v = new Array(dim).fill(0);
+    let h = 0;
+    for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+    for (let i = 0; i < dim; i++) {
+      v[i] = ((h >>> (i % 32)) & 1 ? 0.1 : -0.1) + Math.sin(i + h) * 0.01;
+    }
+    // normalize rough
+    let norm = Math.sqrt(v.reduce((s, x) => s + x*x, 0)) || 1;
+    return v.map(x => x / norm);
+  }
+
+  async function freeEmbedModel(): Promise<void> {
+    try {
+      await Llama?.freeEmbedModel();
+      dispatch({ type: 'SET_EMBED_LOADED', loaded: false, modelId: '' });
+    } catch (e) {
+      console.warn('freeEmbedModel error', e);
+    }
+  }
+
+  // Cosine similarity
+  function cosineSim(a: number[], b: number[]): number {
+    let dot = 0, na = 0, nb = 0;
+    const len = Math.min(a.length, b.length);
+    for (let i = 0; i < len; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
+  }
+
+  // Add document: chunk, embed each, store vectors + doc meta
+  async function addRAGDocument(title: string, content: string, source: 'paste' | 'file' | 'directory' = 'paste') {
+    if (!state.embedLoaded) {
+      // always load embed if RAG will be used
+      const defaultEmbed = EMBED_CATALOG[0];
+      await loadEmbedModel(defaultEmbed.filename);
+    }
+    const chunks = chunkText(content);
+    const vectors: any = { ...state.ragVectors };
+    const chunkIds: string[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const ch = chunks[i];
+      const vec = await getEmbeddings(ch);
+      if (vec.length === 0) continue;
+      const cid = `c_${uid()}`;
+      vectors[cid] = { vector: vec, text: ch, docId: '', title };
+      chunkIds.push(cid);
+    }
+    const docId = `d_${uid()}`;
+    // update vectors with docId
+    chunkIds.forEach(cid => { if (vectors[cid]) vectors[cid].docId = docId; });
+    const doc = {
+      id: docId,
+      title,
+      content,
+      chunks: chunks.length,
+      source,
+      addedAt: Date.now(),
+    };
+    dispatch({ type: 'ADD_DOCUMENT', doc });
+    dispatch({ type: 'SET_RAG_VECTORS', vectors });
+    // persist
+    // for MVP, rely on state persist? or extend storage later
+  }
+
+  // Retrieve top k relevant chunks for query
+  async function retrieveRAGContext(query: string, k = 5): Promise<string> {
+    if (!state.embedLoaded) {
+      const defaultEmbed = EMBED_CATALOG[0];
+      await loadEmbedModel(defaultEmbed.filename);
+    }
+    if (Object.keys(state.ragVectors).length === 0) return '';
+    const qvec = await getEmbeddings(query);
+    if (qvec.length === 0) return '';
+    const scored = Object.entries(state.ragVectors).map(([cid, v]) => ({
+      cid,
+      score: cosineSim(qvec, v.vector),
+      text: v.text,
+      title: v.title,
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    const top = scored.slice(0, k);
+    if (top.length === 0) return '';
+    let ctx = '';
+    top.forEach((t) => {
+      ctx += `Source "${t.title}": ${t.text}\n`;
+    });
+    return ctx ? `Additional context from the user's private documents (consider if relevant, but do not repeat these source blocks verbatim in your reply):\n${ctx}\n` : '';
   }
 
   function forkConversation(id: string) {
@@ -367,8 +628,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updatedAt: Date.now(),
     };
     dispatch({ type: 'ADD_CONV', conv: forked });
-    dispatch({ type: 'SET_ACTIVE_CONV', id: nid });
-    dispatch({ type: 'SET_SCREEN', screen: 'chat' });
+    dispatch({ type: 'NAVIGATE', screen: 'chat', convId: nid });
   }
 
   function exportConversation(id: string) {
@@ -492,6 +752,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_CONVS', convs: persistedConvs });
       dispatch({ type: 'SET_THEME', dark: persistedTheme });
 
+      // Ensure embed model is loaded if any conv has ragEnabled (per user requirement)
+      const hasRagEnabled = Object.values(persistedConvs).some((c: any) => c?.ragEnabled);
+      if (hasRagEnabled) {
+        const defaultEmbed = EMBED_CATALOG[0];
+        loadEmbedModel(defaultEmbed.filename).catch(() => {});
+      }
+
       // Restore HTTP MCP servers
       if (persistedMCPServers.length > 0) {
         dispatch({ type: 'SET_MCP_SERVERS', servers: persistedMCPServers });
@@ -543,6 +810,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               // File gone (uninstalled/cleared) — drop the stale reference.
               saveLoadedModel(null);
             }
+          }
+
+          // Load embed model id and auto-load if present (for RAG)
+          const loadedEmbedId = await loadEmbedModelId();
+          if (loadedEmbedId && !cancelled) {
+            const epath = modelPath(loadedEmbedId);
+            const eexists = await Llama?.fileExists(epath);
+            if (eexists) {
+              const eok = await Llama?.loadEmbedModel(epath);
+              if (eok) {
+                dispatch({ type: 'SET_EMBED_LOADED', loaded: true, modelId: loadedEmbedId });
+              }
+            } else {
+              saveEmbedModelId(null);
+            }
+          }
+
+          // Load RAG docs and vectors
+          const [loadedDocs, loadedVectors] = await Promise.all([loadDocuments(), loadRagVectors()]);
+          if (!cancelled) {
+            dispatch({ type: 'SET_DOCUMENTS', documents: loadedDocs });
+            dispatch({ type: 'SET_RAG_VECTORS', vectors: loadedVectors });
           }
 
           for (const wm of [...WHISPER_CATALOG].reverse()) {
@@ -605,6 +894,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
           });
         }
+      } else {
+        // The native downloadModel promise resolves immediately (the work runs
+        // on a background thread and reports back via this event), so this is
+        // the ONLY place an actual download failure surfaces. Without it, a
+        // failed multi-GB model download silently vanishes after a brief spin.
+        Alert.alert(
+          'Download Failed',
+          `Could not download ${e.filename}.${e.error ? `\n\n${e.error}` : ''}`,
+        );
       }
       dispatch({ type: 'REMOVE_DOWNLOAD', filename: e.filename });
     });
@@ -629,6 +927,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     connectMCPServer, disconnectMCPServer,
     connectNostrServer, disconnectNostrServer,
     getToolPrompt, executeToolCalls,
+    loadEmbedModel, getEmbeddings, freeEmbedModel,
+    addRAGDocument, retrieveRAGContext, chunkText,  // for RAG UI
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

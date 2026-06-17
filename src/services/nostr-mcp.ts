@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Nostr MCP Client (ContextVM-compatible)
+ * Kvak — Nostr MCP Client (ContextVM-compatible)
  *
  * Lightweight MCP-over-Nostr client that connects to remote MCP tool servers
  * via Nostr relays using NIP-44 encryption and gift-wrap (NIP-59).
@@ -367,7 +367,7 @@ class NostrMCPClient {
         params: {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: {},
-          clientInfo: { name: 'mango-qvac', version: '1.0.0' },
+          clientInfo: { name: 'kvak', version: '1.0.0' },
         },
       });
       conn.serverInfo = (initResult as any)?.serverInfo;

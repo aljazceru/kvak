@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Type definitions
+ * Kvak — Type definitions
  */
 
 export interface Message {
@@ -24,6 +24,7 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   systemPrompt?: string;
+  ragEnabled?: boolean;  // for full RAG context injection
 }
 
 export interface ModelInfo {
@@ -60,7 +61,7 @@ export interface DownloadProgress {
   total: number;
 }
 
-export type Screen = 'conversations' | 'chat' | 'settings' | 'model_picker';
+export type Screen = 'conversations' | 'chat' | 'settings' | 'model_picker' | 'documents' | 'memories' | 'lock';
 
 // ─── MCP (HTTP/SSE) ────────────────────────────────────────────────
 

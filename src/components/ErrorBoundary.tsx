@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Error boundary
+ * Kvak — Error boundary
  * Catches native module crashes and displays a fallback UI.
  */
 import React, { Component } from 'react';

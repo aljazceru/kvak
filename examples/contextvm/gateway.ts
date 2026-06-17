@@ -1,5 +1,5 @@
 // ContextVM gateway: exposes the test MCP server (`echo`, `add`) over Nostr via
-// a local relay, so the Mango app can reach it as a Nostr MCP server.
+// a local relay, so the Kvak app can reach it as a Nostr MCP server.
 //
 // Run this from your @contextvm/sdk checkout (so `@contextvm/sdk`,
 // `@modelcontextprotocol/sdk`, and `nostr-tools` resolve). That checkout MUST
@@ -40,7 +40,7 @@ const gateway = new NostrMCPGateway({
     relayHandler: RELAYS,
     isPublicServer: true,
     publishRelayList: false,
-    serverInfo: { name: 'Mango Test', website: 'http://localhost' },
+    serverInfo: { name: 'Kvak Test', website: 'http://localhost' },
   },
 });
 await gateway.start();

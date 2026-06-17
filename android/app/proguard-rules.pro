@@ -11,7 +11,7 @@
 }
 
 # Native modules (JNI)
--keep class com.mangoqvac.** { *; }
+-keep class com.kvak.** { *; }
 -keep class com.facebook.react.bridge.** { *; }
 
 # AsyncStorage

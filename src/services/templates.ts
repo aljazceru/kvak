@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Chat templates
+ * Kvak — Chat templates
  * Converts message arrays into model-specific prompt strings.
  */
 import type { Message } from '../types';

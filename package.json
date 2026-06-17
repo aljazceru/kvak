@@ -1,17 +1,17 @@
 {
-  "name": "mango-qvac",
+  "name": "kvak",
   "version": "0.1.0",
   "description": "On-device AI chat for Android — local LLMs (llama.cpp), Whisper STT, and MCP tool calling over HTTP and Nostr (ContextVM).",
   "license": "MIT",
   "private": true,
-  "author": "Mango QVAC contributors",
-  "homepage": "https://github.com/mango-qvac/mango-qvac#readme",
+  "author": "Kvak contributors",
+  "homepage": "https://github.com/aljazceru/kvak#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mango-qvac/mango-qvac.git"
+    "url": "https://github.com/aljazceru/kvak.git"
   },
   "bugs": {
-    "url": "https://github.com/mango-qvac/mango-qvac/issues"
+    "url": "https://github.com/aljazceru/kvak/issues"
   },
   "keywords": [
     "react-native",

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Mango QVAC is pre-1.0 research/hackathon software. Security fixes target the
+Kvak is pre-1.0 research/hackathon software. Security fixes target the
 latest `main` only.
 
 ## Reporting a vulnerability
@@ -10,7 +10,7 @@ latest `main` only.
 **Do not open a public GitHub issue for security vulnerabilities.**
 
 Please report suspected vulnerabilities privately by opening a
-[GitHub Security Advisory](https://github.com/mango-qvac/mango-qvac/security/advisories/new)
+[GitHub Security Advisory](https://github.com/kvak/kvak/security/advisories/new)
 ("Report a vulnerability"), or contact a maintainer directly. Include:
 
 - A description of the issue and its potential impact

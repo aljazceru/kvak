@@ -77,9 +77,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.mangoqvac"
+    namespace "com.kvak"
     defaultConfig {
-        applicationId "com.mangoqvac"
+        applicationId "com.kvak"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -128,4 +128,11 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // For on-device RAG: text extraction from PDFs (embedded text) and EPUBs (XHTML content)
+    // pdfbox-android is a pure-Android port, no native deps, works well with RN.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // jsoup for robust HTML/XHTML text extraction in EPUBs (and future HTML docs).
+    // Small, widely used.
+    implementation("org.jsoup:jsoup:1.17.2")
 }

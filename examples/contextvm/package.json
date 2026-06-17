@@ -1,5 +1,5 @@
 {
-  "name": "mango-qvac-contextvm-example",
+  "name": "kvak-contextvm-example",
   "private": true,
   "version": "0.1.0",
   "description": "Local Nostr relay + ContextVM gateway for testing the app's MCP-over-Nostr integration.",

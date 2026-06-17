@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Chat Screen
+ * Kvak — Chat Screen
  * Full chat interface with streaming, stop, retry, edit, copy, TTS, STT, tool calls.
  */
 import React, { useState, useRef, useEffect } from 'react';
@@ -12,7 +12,7 @@ import { useApp } from '../state';
 import { getTheme } from '../theme';
 import { styles as s } from '../theme';
 import { MarkdownText } from '../components/MarkdownText';
-import { SYSTEM_PROMPT_DEFAULT } from '../services/constants';
+import { SYSTEM_PROMPT_DEFAULT, EMBED_CATALOG } from '../services/constants';
 // tool calls handled via useApp().executeToolCalls
 import { buildPrompt } from '../services/templates';
 import { Llama, Speech, Whisper } from '../services/native';
@@ -21,7 +21,7 @@ import { uid } from '../services/helpers';
 const emitter = new NativeEventEmitter();
 
 export const ChatScreen: React.FC = React.memo(() => {
-  const { state, dispatch, executeToolCalls, getToolPrompt, forkConversation, exportConversation } = useApp();
+  const { state, dispatch, executeToolCalls, getToolPrompt, forkConversation, exportConversation, retrieveRAGContext, loadEmbedModel } = useApp();
   const conv = state.activeConvId ? state.convs[state.activeConvId] : null;
   const c = getTheme(state.isDark);
 
@@ -32,7 +32,7 @@ export const ChatScreen: React.FC = React.memo(() => {
   const [sttPartial, setSttPartial] = useState('');
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const [ttsId, setTtsId] = useState<string | null>(null);
-  const [showMenu, setShowMenu] = useState(false);
+  // showConvMenu comes from global state (toggled by top gear in chat header)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [sysPrompt, setSysPrompt] = useState(conv?.systemPrompt || '');
@@ -50,7 +50,39 @@ export const ChatScreen: React.FC = React.memo(() => {
   async function finalizeMessage(text: string) {
     if (!state.activeConvId) return;
     try {
-      const { cleaned, toolCalls } = await executeToolCalls(text, conv?.toolsEnabled ?? false);
+      let { cleaned, toolCalls } = await executeToolCalls(text, conv?.toolsEnabled ?? false);
+
+      // If tools were used, do a *second generation pass* feeding the tool results back
+      // so the model can synthesize a clean final answer. This way the visible output
+      // never contains raw "searching the web..." planning text or tool result dumps.
+      // The tool use itself is "temporary" (no dedicated message for the call/plan).
+      if (toolCalls.length > 0) {
+        const toolResText = toolCalls.map(tc => `Tool "${tc.name}" result: ${tc.result}`).join('\n\n');
+        // Build a continuation prompt: history up to the (just processed) user query + observation
+        const curConv = state.convs[state.activeConvId!];
+        const sys = curConv?.systemPrompt || `${SYSTEM_PROMPT_DEFAULT} ${curConv?.toolsEnabled ? getToolPrompt() : 'Be concise.'}`;
+        // Note: the raw plan text is intentionally *not* added to history as an assistant msg.
+        const continuationMsgs = [
+          { id: 'sys', role: 'system' as const, content: sys },
+          ...curConv.messages,  // up to the user question
+          { id: `toolobs_${uid()}`, role: 'assistant' as const, content: `I used a tool. Here is the result:\n${toolResText}\n\nNow give the final helpful answer to the user (without mentioning the raw tool format or that you "used a tool").` },
+        ];
+        const contPrompt = buildPrompt(continuationMsgs, state.loadedTemplate);
+        try {
+          if (Llama && Llama.complete) {
+            const finalResponse = await Llama.complete(contPrompt, 256);
+            const { cleaned: finalCleaned } = await executeToolCalls(finalResponse, curConv?.toolsEnabled ?? false);
+            cleaned = finalCleaned || finalResponse;  // use the synthesized answer
+            toolCalls = [];  // do not attach toolCalls to the final visible msg
+          }
+        } catch (contErr) {
+          console.warn('Tool continuation failed, falling back to plan text', contErr);
+          // fallback: keep the (now stripped) cleaned + note
+          cleaned = cleaned || 'Tool used.';
+          toolCalls = [];
+        }
+      }
+
       dispatch({
         type: 'ADD_MESSAGE',
         convId: state.activeConvId!,
@@ -180,6 +212,8 @@ export const ChatScreen: React.FC = React.memo(() => {
     setStreamingText('');
     Keyboard.dismiss();
 
+    const conv = state.convs[state.activeConvId];
+
     // Add user message
     dispatch({
       type: 'ADD_MESSAGE',
@@ -187,8 +221,18 @@ export const ChatScreen: React.FC = React.memo(() => {
       message: { id: `m_${uid()}`, role: 'user', content: text },
     });
 
+    // RAG context injection if enabled for this conv (full RAG)
+    let sysContent = conv?.systemPrompt || `${SYSTEM_PROMPT_DEFAULT} ${conv?.toolsEnabled ? getToolPrompt() : 'Be concise.'}`;
+    if (conv?.ragEnabled && retrieveRAGContext) {
+      try {
+        const ragCtx = await retrieveRAGContext(text, 4);
+        if (ragCtx) {
+          sysContent = (conv?.systemPrompt || SYSTEM_PROMPT_DEFAULT) + '\n' + ragCtx + (conv?.toolsEnabled ? '\n' + getToolPrompt() : '');
+        }
+      } catch (e) { console.warn('RAG retrieve failed', e); }
+    }
+
     // Auto-title on first message
-    const conv = state.convs[state.activeConvId];
     if (conv && conv.messages.filter(m => m.role === 'user').length === 0) {
       dispatch({
         type: 'UPDATE_CONV',
@@ -198,7 +242,6 @@ export const ChatScreen: React.FC = React.memo(() => {
     }
 
     try {
-      const sysContent = conv?.systemPrompt || `${SYSTEM_PROMPT_DEFAULT} ${conv?.toolsEnabled ? getToolPrompt() : 'Be concise.'}`;
       const allMsgs = [
         { id: 'sys', role: 'system' as const, content: sysContent },
         ...state.convs[state.activeConvId].messages,
@@ -210,7 +253,31 @@ export const ChatScreen: React.FC = React.memo(() => {
         await Llama.streamCompletion(prompt, 256);
       } else if (Llama) {
         let response = await Llama.complete(prompt, 256);
-        const { cleaned, toolCalls } = await executeToolCalls(response, conv?.toolsEnabled ?? false);
+        let { cleaned, toolCalls } = await executeToolCalls(response, conv?.toolsEnabled ?? false);
+
+        if (toolCalls.length > 0) {
+          // same continuation logic as streaming path for clean final answer
+          const toolResText = toolCalls.map(tc => `Tool "${tc.name}" result: ${tc.result}`).join('\n\n');
+          const curConv = state.convs[state.activeConvId!];
+          const sys = curConv?.systemPrompt || `${SYSTEM_PROMPT_DEFAULT} ${curConv?.toolsEnabled ? getToolPrompt() : 'Be concise.'}`;
+          const continuationMsgs = [
+            { id: 'sys', role: 'system' as const, content: sys },
+            ...curConv.messages,
+            { id: `toolobs_${uid()}`, role: 'assistant' as const, content: `I used a tool. Here is the result:\n${toolResText}\n\nNow give the final helpful answer to the user (without mentioning the raw tool format).` },
+          ];
+          const contPrompt = buildPrompt(continuationMsgs, state.loadedTemplate);
+          try {
+            const finalResponse = await Llama.complete(contPrompt, 256);
+            const { cleaned: finalCleaned } = await executeToolCalls(finalResponse, curConv?.toolsEnabled ?? false);
+            cleaned = finalCleaned || finalResponse;
+            toolCalls = [];
+          } catch (contErr) {
+            console.warn('Tool continuation (direct) failed', contErr);
+            cleaned = cleaned || 'Tool used.';
+            toolCalls = [];
+          }
+        }
+
         dispatch({
           type: 'ADD_MESSAGE',
           convId: state.activeConvId!,
@@ -278,23 +345,40 @@ export const ChatScreen: React.FC = React.memo(() => {
 
   return (
     <View style={s.flex}>
-      {/* Menu */}
-      {showMenu && (
+      {/* Menu - now the conversation settings, opened via top-right gear in chat header.
+          (Bottom "Tools ON" chip removed per requirements.) */}
+      {state.showConvMenu && (
         <View style={[s.menuPanel, { backgroundColor: c.card, borderBottomColor: c.border }]}>
-          <TouchableOpacity style={s.menuItem} onPress={() => { setShowMenu(false); setShowSysPrompt(!showSysPrompt); }}>
+          <TouchableOpacity style={s.menuItem} onPress={() => { dispatch({ type: 'SET_SHOW_CONV_MENU', show: false }); setShowSysPrompt(!showSysPrompt); }}>
             <Text style={{ color: c.textPrimary, fontSize: 14 }}>Instructions</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.menuItem} onPress={() => { setShowMenu(false); forkConversation(conv.id); }}>
+          <TouchableOpacity style={s.menuItem} onPress={() => { dispatch({ type: 'SET_SHOW_CONV_MENU', show: false }); forkConversation(conv.id); }}>
             <Text style={{ color: c.textPrimary, fontSize: 14 }}>Fork</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.menuItem} onPress={() => { setShowMenu(false); exportConversation(conv.id); }}>
+          <TouchableOpacity style={s.menuItem} onPress={() => { dispatch({ type: 'SET_SHOW_CONV_MENU', show: false }); exportConversation(conv.id); }}>
             <Text style={{ color: c.textPrimary, fontSize: 14 }}>Export</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.menuItem} onPress={() => {
             dispatch({ type: 'UPDATE_CONV', id: conv.id, patch: { toolsEnabled: !conv.toolsEnabled } });
-            setShowMenu(false);
+            dispatch({ type: 'SET_SHOW_CONV_MENU', show: false });
           }}>
             <Text style={{ color: c.textPrimary, fontSize: 14 }}>Tools {conv.toolsEnabled ? 'ON' : 'OFF'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.menuItem} onPress={async () => {
+            const newVal = ! (conv.ragEnabled ?? false);
+            dispatch({ type: 'UPDATE_CONV', id: conv.id, patch: { ragEnabled: newVal } });
+            dispatch({ type: 'SET_SHOW_CONV_MENU', show: false });
+            if (newVal) {
+              if (!state.embedLoaded && loadEmbedModel) {
+                const defaultEmbed = EMBED_CATALOG[0];
+                await loadEmbedModel(defaultEmbed.filename);
+              }
+              if (state.documents.length === 0) {
+                Alert.alert('No documents', 'Add some in Settings → Document Library first for RAG to help.');
+              }
+            }
+          }}>
+            <Text style={{ color: c.textPrimary, fontSize: 14 }}>RAG { (conv.ragEnabled ?? false) ? 'ON' : 'OFF' }</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -363,11 +447,11 @@ export const ChatScreen: React.FC = React.memo(() => {
               ) : m.content.trim() ? (
                 <MarkdownText text={m.content} style={s.bubbleText} theme={c} />
               ) : null}
-              {m.toolCalls?.map((tc, i) => (
-                <View key={i} style={[s.toolCallItem, { borderLeftColor: c.yellow }]}>
-                  <Text style={[s.toolCallText, { color: c.yellow }]}>{tc.name} → {tc.result}</Text>
-                </View>
-              ))}
+              {m.toolCalls && m.toolCalls.length > 0 && (
+                <Text style={{ fontSize: 11, color: c.mutedText, marginTop: 4, fontStyle: 'italic' }}>
+                  🔧 Used tool{m.toolCalls.length > 1 ? 's' : ''}: {m.toolCalls.map(tc => tc.name).join(', ')}
+                </Text>
+              )}
             </View>
 
             {/* Actions */}
@@ -441,14 +525,8 @@ export const ChatScreen: React.FC = React.memo(() => {
         )}
       </View>
 
-      {/* Status footer */}
-      <View style={[s.composeFooter, { backgroundColor: c.bg }]}>
-        <Text style={[s.composeStatus, { color: state.modelLoaded ? c.green : c.mutedText }]}>{state.modelLoaded ? '● On-device' : '○ No model'}</Text>
-        <TouchableOpacity style={[s.toolsChip, { backgroundColor: c.surface }]} onPress={() => setShowMenu(!showMenu)}>
-          <Text style={[s.composeStatus, { color: conv.toolsEnabled ? c.green : c.textSecondary }]}>{conv.toolsEnabled ? 'Tools ON' : 'Tools'}</Text>
-          <Text style={[s.composeStatus, { color: c.textSecondary }]}>···</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Bottom status/footer removed: no more "On-device" or "Tools ON" per requirements.
+          Per-conversation settings (incl. Tools toggle) are now in the top gear menu when in chat view. */}
     </View>
   );
 });

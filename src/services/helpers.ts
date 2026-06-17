@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Helpers
+ * Kvak — Helpers
  */
 export function relativeTime(ts: number): string {
   const diff = Math.floor((Date.now() - ts) / 1000);

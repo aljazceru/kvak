@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Theme system
+ * Kvak — Theme system
  * Memoized color palette for dark/light modes.
  */
 export interface ThemeColors {

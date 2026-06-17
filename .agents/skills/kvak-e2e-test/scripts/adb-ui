@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# adb-ui — drive an Android app's UI over adb without screenshots.
+# Built for Kvak but works on any app (override PKG).
+#
+#   adb-ui dump            list visible nodes: "x\ty\t<label>" (text + content-desc)
+#   adb-ui find LABEL      print "x y" of first node whose label contains LABEL
+#   adb-ui findi LABEL     same, case-insensitive
+#   adb-ui tap LABEL       tap center of first matching node (re-dumps for fresh coords)
+#   adb-ui send STR        type STR into focused field. %s → space (adb can't pass spaces)
+#   adb-ui buttons         list only tappable labels (quick scan of current screen)
+#
+# Gotchas (see references/adb-quirks.md): emoji buttons (⚙️ ↑ ＋) have no ASCII
+# substring — tap them by coords copied from `dump`. After `send`, the keyboard
+# shifts the layout; `tap` re-dumps each call so it lands correctly.
+set -euo pipefail
+PKG=${PKG:-com.kvak}
+
+dump_xml() {
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+  adb pull /sdcard/ui.xml /tmp/adb-ui.xml >/dev/null 2>&1
+  adb shell rm /sdcard/ui.xml >/dev/null 2>&1
+}
+
+label_nodes() {  # python on /tmp/adb-ui.xml, args: mode
+  python3 - "$1" <<'PY'
+import re, html, sys
+mode = sys.argv[1]
+t = open('/tmp/adb-ui.xml').read()
+# Collect (label, x, y, clickable) from both text= and content-desc= attributes.
+seen = set()
+nodes = []
+for m in re.finditer(r'(?:text|content-desc)="([^"]+)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', t):
+    label = html.unescape(m.group(1))
+    if not label.strip():
+        continue
+    x = (int(m.group(2)) + int(m.group(4))) // 2
+    y = (int(m.group(3)) + int(m.group(5))) // 2
+    key = (label, x, y)
+    if key in seen:
+        continue
+    seen.add(key)
+    nodes.append((label, x, y))
+for label, x, y in nodes:
+    if mode == 'dump':
+        print(f"{x}\t{y}\t{label}")
+    elif mode == 'buttons':
+        print(f"{x}\t{y}\t{label}")
+PY
+}
+
+find_node() {  # args: needle, case-insensitive-flag
+  python3 - "$1" "$2" <<'PY'
+import re, html, sys
+needle, ci = sys.argv[1], sys.argv[2]
+pat = re.compile((r'(?i)' if ci else '') + re.escape(needle))
+t = open('/tmp/adb-ui.xml').read()
+for m in re.finditer(r'(?:text|content-desc)="([^"]+)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', t):
+    label = html.unescape(m.group(1))
+    if pat.search(label):
+        x = (int(m.group(2)) + int(m.group(4))) // 2
+        y = (int(m.group(3)) + int(m.group(5))) // 2
+        print(f"{x} {y}")
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+case "${1:-}" in
+  dump)
+    dump_xml; label_nodes dump ;;
+  buttons)
+    dump_xml; label_nodes buttons ;;
+  find)
+    [ $# -ge 2 ] || { echo "usage: adb-ui find LABEL" >&2; exit 2; }
+    dump_xml; find_node "$2" "" ;;
+  findi)
+    [ $# -ge 2 ] || { echo "usage: adb-ui findi LABEL" >&2; exit 2; }
+    dump_xml; find_node "$2" "i" ;;
+  tap)
+    [ $# -ge 2 ] || { echo "usage: adb-ui tap LABEL" >&2; exit 2; }
+    dump_xml
+    coord="$(find_node "$2" "")" || { echo "tap: '$2' not found" >&2; exit 1; }
+    echo "tap $coord  ($2)" >&2
+    adb shell input tap $coord ;;
+  send)
+    [ $# -ge 2 ] || { echo "usage: adb-ui send STR" >&2; exit 2; }
+    str="${2//%s/ }"
+    adb shell input text "$str" ;;
+  *)
+    echo "usage: adb-ui {dump|buttons|find LABEL|findi LABEL|tap LABEL|send STR}" >&2
+    exit 2 ;;
+esac

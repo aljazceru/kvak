@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Shared styles
+ * Kvak — Shared styles
  * All StyleSheet.create calls in one place.
  */
 import { StyleSheet, Platform } from 'react-native';

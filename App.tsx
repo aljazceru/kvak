@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — On-Device AI Chat
+ * Kvak — On-Device AI Chat
  * Production-grade architecture: Context state, persistence, error boundaries,
  * streaming, stop, copy, markdown, rename, timestamps, errors, retry,
  * system prompt, unload, fork, export, edit, dark/light theme.
@@ -9,7 +9,7 @@
 import React, { useEffect } from 'react';
 import {
   View, Text, TouchableOpacity,
-  StatusBar, BackHandler,
+  StatusBar, BackHandler, Platform,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,35 +21,52 @@ import { ConversationListScreen } from './src/screens/ConversationListScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ModelPickerScreen } from './src/screens/ModelPickerScreen';
+import { DocumentLibraryScreen } from './src/screens/DocumentLibraryScreen';
+import { LockScreen } from './src/screens/LockScreen';
 
 function AppInner() {
   const { state, dispatch, newConversation } = useApp();
   const c = getTheme(state.isDark);
   const conv = state.activeConvId ? state.convs[state.activeConvId] : null;
 
-  // Android back gesture/button
+  // Android back gesture/button + swipe back.
+  // Uses navigationHistory stack so "back" returns to previous intent/screen.
+  // Special fallback: chat always pops to conversations list.
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (state.screen === 'model_picker') {
-        dispatch({ type: 'SET_SCREEN', screen: 'settings' });
+      if (state.navigationHistory.length > 0) {
+        dispatch({ type: 'GO_BACK' });
         return true;
       }
       if (state.screen === 'chat') {
         dispatch({ type: 'SET_SCREEN', screen: 'conversations' });
         return true;
       }
+      if (state.screen === 'model_picker') {
+        dispatch({ type: 'SET_SCREEN', screen: 'settings' });
+        return true;
+      }
+      if (state.screen === 'documents' || state.screen === 'memories') {
+        dispatch({ type: 'SET_SCREEN', screen: 'settings' });
+        return true;
+      }
       return false;
     });
     return () => handler.remove();
-  }, [state.screen, dispatch]);
+  }, [state.navigationHistory.length, state.screen, dispatch]);
 
   const insets = useSafeAreaInsets();
   const chatsActive = state.screen === 'conversations' || state.screen === 'chat';
   const settingsActive = state.screen === 'settings';
-  // Lift the whole window above the soft keyboard so the compose bar (and the
-  // text being typed) stays visible. Adjusts for edge-to-edge on targetSdk 35+.
   const keyboardHeight = useKeyboardHeight();
-  const paddingBottom = Math.max(insets.bottom, keyboardHeight);
+  const isAndroid = Platform.OS === 'android';
+  // On Android (edge-to-edge + windowSoftInputMode=adjustNothing) the keyboard
+  // overlays the bottom. We make the tabBar itself grow downward into the
+  // overlay region and use internal paddingBottom to shift the Chats / + / Settings
+  // buttons up so they sit flush above the keyboard (no overlap at bottom edge).
+  // This also shrinks the preceding screen content (compose bar etc) by the same
+  // amount so everything lifts together. On iOS we retain the root padding method.
+  const paddingBottom = isAndroid ? insets.bottom : Math.max(insets.bottom, keyboardHeight);
 
   return (
     <View style={[s.root, { backgroundColor: c.bg, paddingTop: insets.top, paddingBottom }]}>
@@ -60,7 +77,7 @@ function AppInner() {
         {state.screen === 'chat' && conv ? (
           <>
             <TouchableOpacity
-              onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'conversations' })}
+              onPress={() => dispatch({ type: 'GO_BACK' })}
               style={s.headerBtn}
             >
               <Text style={[s.headerBtnText, { color: c.accent }]}>‹ Back</Text>
@@ -70,8 +87,10 @@ function AppInner() {
                 {conv.title}
               </Text>
             </View>
+            {/* In conversation view, gear opens *conversation* settings (sys prompt, fork, export, tools toggle).
+                Global settings are reached via the bottom Settings tab. */}
             <TouchableOpacity
-              onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'settings' })}
+              onPress={() => dispatch({ type: 'SET_SHOW_CONV_MENU', show: !state.showConvMenu })}
               style={s.headerBtn}
             >
               <Text style={{ fontSize: 18 }}>⚙️</Text>
@@ -80,7 +99,7 @@ function AppInner() {
         ) : state.screen === 'model_picker' ? (
           <>
             <TouchableOpacity
-              onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'settings' })}
+              onPress={() => dispatch({ type: 'GO_BACK' })}
               style={s.headerBtn}
             >
               <Text style={[s.headerBtnText, { color: c.accent }]}>‹ Back</Text>
@@ -92,7 +111,7 @@ function AppInner() {
           <>
             <View style={s.headerBtn} />
             <Text style={[s.headerTitle, { color: c.textPrimary }]}>
-              {state.screen === 'settings' ? 'Settings' : 'Mango × QVAC'}
+              {state.screen === 'settings' ? 'Settings' : 'Kvak'}
             </Text>
             <View style={s.headerBtn} />
           </>
@@ -108,13 +127,24 @@ function AppInner() {
         <SettingsScreen />
       ) : state.screen === 'model_picker' ? (
         <ModelPickerScreen />
+      ) : state.screen === 'documents' ? (
+        <DocumentLibraryScreen />
+      ) : state.screen === 'lock' ? (
+        <LockScreen />
       ) : (
         <ConversationListScreen />
       )}
 
       {/* Tab bar — hidden on model_picker (has its own back nav) */}
       {state.screen !== 'model_picker' && (
-      <View style={[s.tabBar, { backgroundColor: c.bg, borderTopColor: c.border }]}>
+      <View style={[
+        s.tabBar,
+        { backgroundColor: c.bg, borderTopColor: c.border },
+        isAndroid && keyboardHeight > 0 && {
+          height: 64 + keyboardHeight,
+          paddingBottom: keyboardHeight,
+        },
+      ]}>
         <TouchableOpacity
           style={s.tab}
           onPress={() => dispatch({ type: 'SET_SCREEN', screen: 'conversations' })}

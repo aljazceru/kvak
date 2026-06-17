@@ -1,4 +1,4 @@
-# Contributing to Mango QVAC
+# Contributing to Kvak
 
 Thanks for your interest in contributing! This is a small project — keep PRs focused.
 

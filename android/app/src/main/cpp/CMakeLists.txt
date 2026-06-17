@@ -1,18 +1,18 @@
 cmake_minimum_required(VERSION 3.22)
-project(mango_llama)
+project(kvak_llama)
 
 # Path to a llama.cpp checkout. Override with -DLLAMA_DIR=... or the LLAMA_DIR env var.
-# NOTE: This CMakeLists rebuilds only the thin JNI bridge (libmango_llama.so).
+# NOTE: This CMakeLists rebuilds only the thin JNI bridge (libkvak_llama.so).
 # The gradle build does NOT invoke CMake — the committed .so files in jniLibs/
 # are linked directly. Rebuild only if you change the C++ bridge or upgrade llama.cpp.
 set(LLAMA_DIR "$ENV{LLAMA_DIR}" CACHE PATH "Path to a llama.cpp source checkout")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/arm64-v8a")
 
-add_library(mango_llama SHARED
+add_library(kvak_llama SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/../jni/llama_bridge.cpp
 )
 
-target_include_directories(mango_llama PRIVATE
+target_include_directories(kvak_llama PRIVATE
     ${LLAMA_DIR}/include
     ${LLAMA_DIR}/ggml/include
     ${LLAMA_DIR}/common
@@ -46,7 +46,7 @@ set_target_properties(ggml-cpu PROPERTIES
 
 find_library(log-lib log)
 
-target_link_libraries(mango_llama
+target_link_libraries(kvak_llama
     llama
     llama-common
     ggml

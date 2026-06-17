@@ -1,11 +1,12 @@
 /**
- * Mango × QVAC — Tool definitions & execution
+ * Kvak — Tool definitions & execution
  * Built-in tools + MCP remote tool routing (HTTP + Nostr).
  */
 import type { ToolCall, MCPServerConfig } from '../types';
 import { mcpClient } from './mcp';
 import { nostrMcpClient } from './nostr-mcp';
 import type { NostrMCPServerConfig } from './nostr-mcp';
+import { extractToolCalls, parseToolArgs } from './tool-parse';
 
 // ─── Built-in Tools ────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ export function buildToolPrompt(
     }
   }
 
-  prompt += `\nUse tools when helpful. After getting a tool result, continue naturally.`;
+  prompt += `\nWhen you need to use a tool, output *exactly and only* one line in the format [TOOL: tool_name {"param":"value"}] with nothing else before or after it (no "searching the web...", no explanations, no extra text). After a tool result is provided in the next turn, give the final answer naturally.`;
   return prompt;
 }
 
@@ -104,89 +105,79 @@ export async function processToolCalls(
     }
   }
 
-  const regex = /\[TOOL:\s*(\w+)\s*(\{[^}]*\})\]/g;
-  let m;
-  while ((m = regex.exec(response)) !== null) {
+  // Extract tool calls with brace-balanced scanning so args containing `}`
+  // (nested objects, strings with closing braces) are not truncated — the old
+  // regex `(\{[^}]*\})` stopped at the first `}` and corrupted real MCP calls.
+  const rawCalls = extractToolCalls(response);
+  for (const rc of rawCalls) {
     try {
-      const toolName = m[1];
       // Small on-device models frequently emit nearly-valid JSON with unquoted
       // keys or unquoted string values (e.g. {message:banana} or {a: 5}). Try
       // strict parse first, then fall back to a tolerant repair so legitimate
       // tool calls still execute instead of being silently dropped.
-      const args = parseToolArgs(m[2]);
+      const args = parseToolArgs(rc.argsRaw);
 
       let result: string;
 
       // Check Nostr MCP first (more specific)
-      const nostrServer = nostrToolMap.get(toolName);
+      const nostrServer = nostrToolMap.get(rc.name);
       if (nostrServer) {
         try {
-          result = await nostrMcpClient.callTool(nostrServer, toolName, args);
+          result = await nostrMcpClient.callTool(nostrServer, rc.name, args);
         } catch (e: any) {
           result = `Error (Nostr): ${e.message || String(e)}`;
         }
       } else {
         // Then HTTP MCP
-        const mcpServer = mcpToolMap.get(toolName);
+        const mcpServer = mcpToolMap.get(rc.name);
         if (mcpServer) {
           try {
-            result = await mcpClient.callTool(mcpServer, toolName, args);
+            result = await mcpClient.callTool(mcpServer, rc.name, args);
           } catch (e: any) {
             result = `Error (HTTP MCP): ${e.message || String(e)}`;
           }
         } else {
           // Built-in tool
-          const fn = TOOLS[toolName];
+          const fn = TOOLS[rc.name];
           if (fn) {
             result = fn(args);
           } else {
-            continue; // unknown tool, skip
+            continue; // unknown tool, skip (marker still stripped below)
           }
         }
       }
 
-      toolCalls.push({ name: toolName, args: m[2], result });
-      cleaned = cleaned.replace(m[0], '');
+      toolCalls.push({ name: rc.name, args: rc.argsRaw, result });
     } catch { /* ignore malformed tool calls */ }
   }
 
-  // Strip any remaining [TOOL: ...] markers (malformed, unknown, or unparseable)
-  // so the raw tool-call syntax never leaks into the chat as visible text.
+  // Remove every extracted tool-call span from the visible text (reverse order
+  // so earlier indices stay valid), then strip any leftover malformed markers
+  // so raw tool-call syntax never leaks into the chat.
+  for (let i = rawCalls.length - 1; i >= 0; i--) {
+    const rc = rawCalls[i];
+    cleaned = cleaned.slice(0, rc.start) + cleaned.slice(rc.end);
+  }
   cleaned = cleaned.replace(/\[TOOL:\s*[^\]]*\]/g, '').trim();
+
+  // Strip common "thinking" / tool-planning text that small models emit *before*
+  // the [TOOL] marker (e.g. "searching the web for information on agorism",
+  // "I will use the search tool to find...", "Let me look that up...").
+  // This keeps the final assistant content clean and focused on the actual answer.
+  cleaned = cleaned.replace(
+    /^\s*(?:(?:[Ii]\s*(?:am|will|need to|should|have to|am going to)?\s*)?(?:search|searching|use|using|call|calling|query|querying|look|looking|check|checking|retriev|retrieving|find|finding|let me).*?(?:[\.\!\?\n]|$))+/i,
+    ''
+  ).trim();
+
+  // Also strip any echoed RAG context prefixes that the model might repeat into its reply
+  // (RAG is injected in system prompt; we don't want Source "xx": ... or "Additional context..." blocks in user output).
+  cleaned = cleaned.replace(
+    /^(?:Additional context from the user's private documents|Source "[^"]+":\s*.*?\n?|Use (?:the|this) (?:above |additional )?context|Relevant context from your documents)+/i,
+    ''
+  ).trim();
 
   // Empty content is valid (e.g. model emitted only tool calls); the UI hides an empty bubble.
   return { cleaned, toolCalls: toolCalls.length ? toolCalls : [] };
 }
 
-/**
- * Parse a tool-call argument string into an object.
- *
- * Tries strict JSON first. If that fails, applies a tolerant repair for the
- * common ways small on-device models mangle JSON, then retries:
- *   - unquoted keys:        {message: "x"}    → {"message": "x"}
- *   - unquoted string vals: {"k": banana}     → {"k": "banana"}
- *   - trailing commas:      {"a":1,}          → {"a":1}
- * Returns {} if the string still cannot be parsed.
- */
-function parseToolArgs(raw: string): Record<string, any> {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    /* fall through to tolerant repair */
-  }
-  try {
-    let repaired = raw;
-    // Quote unquoted keys: `identifier:` → `"identifier":`
-    repaired = repaired.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
-    // Quote unquoted string values (letters/words not already quoted, not numbers/bools/null)
-    repaired = repaired.replace(/(:\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*[,}])/g, (match, pre, val, post) => {
-      if (val === 'true' || val === 'false' || val === 'null') return match;
-      return `${pre}"${val}"${post}`;
-    });
-    // Strip trailing commas before } or ]
-    repaired = repaired.replace(/,\s*([}\]])/g, '$1');
-    return JSON.parse(repaired);
-  } catch {
-    return {};
-  }
-}
+// parseToolArgs + extractToolCalls live in ./tool-parse (pure, unit-tested).

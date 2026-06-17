@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Lightweight Markdown renderer
+ * Kvak — Lightweight Markdown renderer
  * Handles code blocks, bold/italic/inline-code, headings, bullet/numbered lists.
  */
 import React from 'react';

@@ -1,5 +1,5 @@
 /**
- * Mango × QVAC — Model catalogs and constants
+ * Kvak — Model catalogs and constants
  */
 import type { ModelInfo, WhisperModelInfo } from '../types';
 
@@ -20,4 +20,10 @@ export const WHISPER_CATALOG: WhisperModelInfo[] = [
   { id: 'whisper-small', name: 'Small (English)', sizeMB: 300, description: 'Highest accuracy. Slower.', url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q8_0.bin', filename: 'ggml-small.en-q8_0.bin' },
 ];
 
-export const SYSTEM_PROMPT_DEFAULT = 'You are Mango, a helpful AI running on-device.';
+export const SYSTEM_PROMPT_DEFAULT = 'You are Kvak, a helpful AI running on-device.';
+
+// Small on-device embedding models for full RAG (llama.cpp embed support)
+// Use GGUF embed models compatible with llama (e.g. nomic, arctic, etc. with --pooling mean)
+export const EMBED_CATALOG: ModelInfo[] = [
+  { id: 'nomic-embed', name: 'Nomic Embed Text v1.5', quant: 'Q4_K_M', sizeMB: 70, description: 'Small, fast on-device embeddings (768 dim). Recommended for RAG.', url: 'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf', filename: 'nomic-embed-text-v1.5.Q4_K_M.gguf', template: 'nomic' },
+];
